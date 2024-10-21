@@ -24,8 +24,8 @@ setup(
     'pillow',
     'pytorch-fid',
     'scipy',
-    'torch>=2.0',
-    'torchvision',
+    'torch==2.4',
+    'torchvision==0.19',
     'tqdm'
   ],
   classifiers=[

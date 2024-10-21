@@ -30,7 +30,8 @@ model.eval()
 
 # import pdb;pdb.set_trace()
 batch_size = 50
-samples = model.generate([batch_size, 1, 28, 28]).cpu()
+noise = torch.randn([batch_size, 1, 28, 28])
+samples = model.generate(noise).cpu()
 # samples[-1]
 
 import matplotlib.pyplot as plt
