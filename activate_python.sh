@@ -3,4 +3,8 @@
 if [ -z "${PS1:-}" ]; then
     PS1=__dummy__
 fi
+<<<<<<< HEAD
 . /home/weiran/ccadiffusion/venv/etc/profile.d/conda.sh && conda deactivate && conda activate cca
+=======
+. /data/ccadiffusion/venv/etc/profile.d/conda.sh && conda deactivate && conda activate 
+>>>>>>> b6c8f4f6bb6fcc8fd52c6db1a45aac376c94c3e3
