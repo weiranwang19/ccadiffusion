@@ -2,10 +2,10 @@ import os
 from tqdm import tqdm
 import torch
 from torch.utils.data import DataLoader
-
-from mnist_dataset import NoisyMnistTwoView
+from torch.utils.tensorboard import SummaryWriter
 
 import vcca
+from mnist_dataset import NoisyMnistTwoView
 
 from sklearn.manifold import TSNE
 from sklearn.linear_model import LogisticRegression
@@ -13,6 +13,7 @@ from sklearn.linear_model import LogisticRegression
 from utils import EmbeddedDataset, build_matrix
 
 data_path = './noisy_mnist_two_views.pkl'
+experiment_dir='./vcca_exp'
 
 
 def evaluate(encoder, encoder_name):
@@ -65,31 +66,29 @@ test_set = NoisyMnistTwoView(data_path, split='valid')
 batch_size = 100
 train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
 
-# Write evaluation function on dev.
-
 ##########
 evaluate_every = 100000
 
 writer = None
-epochs = 40
-checkpoint_every = 5
-backup_every = 10000
+epochs = 5
+checkpoint_every = 1
+writer = SummaryWriter(log_dir=experiment_dir)
+
 model = vcca.VCCA(input_dims=[784, 784], latent_dim_shared=30, latent_dims_private=[30, 30],
                   output_activations=['sigmoid', 'sigmoid'],
                   recon_loss_types=['mse_fixed', 'mse_fixed'],
-                  dropout_rate=0.2)
+                  dropout_rate=0.2, writer=writer)
 if torch.cuda.is_available():
     model = model.cuda()
 
-experiment_dir='./vcca_exp'
 
-# for epoch in tqdm(range(epochs)):
-#     for data in tqdm(train_loader):
-#         model.train_step(data)
-#
-#     if epoch % checkpoint_every == 0:
-#         tqdm.write('Storing model checkpoint')
-#         model.save(os.path.join(experiment_dir, 'checkpoint_%02d.pt' % epoch))
+for epoch in tqdm(range(epochs)):
+    for data in tqdm(train_loader):
+        model.train_step(data)
+
+    if epoch % checkpoint_every == 0:
+        tqdm.write('Storing model checkpoint')
+        model.save(os.path.join(experiment_dir, 'checkpoint_%02d.pt' % epoch))
 
 checkpoint_path = experiment_dir + '/checkpoint_40.pt'
 model.load(checkpoint_path)
