@@ -86,7 +86,7 @@ class DNN(nn.Module):
         self.dropout_rate = dropout_rate
         self.return_gaussian_dist = return_gaussian_dist
         self._net = nn.Sequential(
-            nn.Linear(self.hidden_dim, self.hidden_dim),
+            nn.Linear(self.input_dim, self.hidden_dim),
             torch.nn.LayerNorm(self.hidden_dim),
             torch.nn.Dropout(self.dropout_rate),
             nn.ReLU(),
@@ -130,10 +130,15 @@ class VCCA(nn.Module):
 
         self.input_dims = input_dims
         self.output_activations = output_activations
-        self.num_views = len(input_dims)
+        self.recon_loss_types = recon_loss_types
         self.latent_dim_shared = latent_dim_shared
-        assert len(latent_dims_private) == self.num_views
         self.latent_dims_private = latent_dims_private
+
+        self.num_views = len(input_dims)
+        assert self.num_views == len(self.output_activations)
+        assert self.num_views == len(self.recon_loss_types)
+        assert self.num_views == len(self.latent_dims_private)
+
         self.encoders_shared = nn.ModuleList()
         self.encoders_private = nn.ModuleList()
         self.decoders = nn.ModuleList()
@@ -237,7 +242,6 @@ class VCCA(nn.Module):
 
     def _compute_loss(self, data):
         assert len(data) == self.num_views
-        import pdb;pdb.set_trace()
 
         hs = []
         hp = []
@@ -245,12 +249,12 @@ class VCCA(nn.Module):
         prior_hp = []
         latent_loss = 0.0
         for i, x in enumerate(data):
-
             enc_s = self.encoders_shared[i]
             sigma, logvar = enc_s(x)
             latent_kl = normal_kl(sigma, logvar, torch.zeros_like(sigma), torch.zeros_like(logvar)).sum(-1).mean()
-            self._add_loss_item(f'latent_loss_shared_{i}', latent_kl)
+            self._add_loss_item(f'latent_loss_shared_{i}', float(latent_kl))
             latent_loss += latent_kl
+            # Must use rsample to allow reparameterization.
             latent_sample = normal_dist(sigma, logvar).rsample()
             hs.append(latent_sample)
             # prior_hs.append(normal_dist(torch.zeros_like(sigma), torch.zeros_like(logvar)).rsample())
@@ -259,7 +263,7 @@ class VCCA(nn.Module):
             enc_p = self.encoders_private[i]
             sigma, logvar = enc_p(x)
             latent_kl = normal_kl(sigma, logvar, torch.zeros_like(sigma), torch.zeros_like(logvar)).sum(-1).mean()
-            self._add_loss_item(f'latent_loss_private_{i}', latent_kl)
+            self._add_loss_item(f'latent_loss_private_{i}', float(latent_kl))
             latent_loss += latent_kl
             latent_sample = normal_dist(sigma, logvar).rsample()
             hp.append(latent_sample)
@@ -268,7 +272,7 @@ class VCCA(nn.Module):
         # TODO(weiranwang): Configure how to aggregate the shared representations. Below we perform all-pairs recon.
         # TODO(weiranwang): Check the MMVAE without compromise paper for details.
         recon_loss = 0.0
-        for i, x, dec, loss_type in enumerate(zip(data, self.decoders, self.loss_types)):
+        for i, (x, dec, loss_type) in enumerate(zip(data, self.decoders, self.recon_loss_types)):
             for j in range(self.num_views):
                 if j == i:
                     z = torch.cat([hs[j], prior_hp[i]], axis=1)
@@ -276,10 +280,11 @@ class VCCA(nn.Module):
                     z = torch.cat([hs[j], hp[i]], axis=1)
                 recon_mu, recon_logvar = dec(z)
                 recon_loss_j_i = compute_recon_loss(x, recon_mu, recon_logvar, loss_type).sum(-1).mean()
-                recon_loss += loss_j_i
+                self._add_loss_item(f'recon_loss_{j}_{i}', float(recon_loss_j_i))
+                recon_loss += recon_loss_j_i
 
         # after generating samples use mib loss?
-        # give weight
+        # assign weight and beta
         return latent_loss + recon_loss
 
     def generate(self, shape):

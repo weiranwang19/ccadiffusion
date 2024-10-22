@@ -24,10 +24,9 @@ class NoisyMnistTwoView(Dataset):
             raise ValueError(f'Unsupported split {split}')
 
         self.num_samples = N
-        self.X1 = torch.from_numpy(X1)
-        self.X2 = torch.from_numpy(X2)
+        self.X1 = torch.from_numpy(X1).to(torch.float32)
+        self.X2 = torch.from_numpy(X2).to(torch.float32)
         self.Y  = torch.from_numpy(Y)
-        import pdb;pdb.set_trace()
         self.mode = mode
 
         # TODO(weiranwang): add on-the-fly data augmentation later.

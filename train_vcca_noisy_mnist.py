@@ -18,6 +18,7 @@ test_set = NoisyMnistTwoView(data_path, split='valid')
 # Initialization of the data loader
 train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
 
+# Write evaluation function on dev.
 
 ##########
 evaluate_every = 100000
