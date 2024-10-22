@@ -1,15 +1,13 @@
 import numpy as np
-from urllib import request
-import gzip
 import pickle
 import scipy
 import matplotlib.pyplot as plt
 
 filename = [
-["training_images","train-images-idx3-ubyte"],
-["test_images","t10k-images-idx3-ubyte"],
-["training_labels","train-labels-idx1-ubyte"],
-["test_labels","t10k-labels-idx1-ubyte"]
+    ["training_images","train-images-idx3-ubyte"],
+    ["test_images","t10k-images-idx3-ubyte"],
+    ["training_labels","train-labels-idx1-ubyte"],
+    ["test_labels","t10k-labels-idx1-ubyte"]
 ]
 
 root_dir = '/data/MNIST/raw'
@@ -113,7 +111,8 @@ def create_mnist():
     test_x1, test_x2 = add_noise(test_x1, test_x2)
 
     with open("noisy_mnist_two_views.pkl", 'wb') as f:
-        noisy_mnist = {'train_x1': train_x1, 'train_x2': train_x2, 'N_train': N_train,
+        noisy_mnist = {
+            'train_x1': train_x1, 'train_x2': train_x2, 'N_train': N_train,
             'valid_x1': valid_x1, 'valid_x2': valid_x2, 'N_valid': N_valid,
             'test_x1': test_x1, 'test_x2': test_x2, 'N_test': N_test,
         }
