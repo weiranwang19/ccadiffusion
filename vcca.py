@@ -9,6 +9,13 @@ import torch.optim as optimizer_module
 # from ddpm.denoising_diffusion_pytorch.denoising_diffusion_pytorch import Unet, GaussianDiffusion
 from torch.distributions import Normal, Independent
 
+"""
+MVIB:
+
+https://github.com/mfederici/Multi-View-Information-Bottleneck/tree/master
+"""
+
+
 def normal_kl(mu1, logvar1, mu2, logvar2):
     """
     Compute the KL divergence between two gaussians.
@@ -71,10 +78,11 @@ def init_optimizer(optimizer_name, params):
 
 class DNN(nn.Module):
 
-    def __init__(self, input_dim, output_dim, loss_types, hidden_dim=1024, dropout_rate=0.0, return_gaussian_dist=False):
+    def __init__(self, input_dim, output_dim, loss_types, hidden_dim=1024, dropout_rate=0.0, return_gaussian_dist=True):
         super(DNN, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
+        # TODO(weiranwang): consider adding output activation type.
         self.loss_types = loss_types
         self.hidden_dim = hidden_dim
         self.dropout_rate = dropout_rate
@@ -108,7 +116,7 @@ class DNN(nn.Module):
 class VCCA(nn.Module):
 
     def __init__(self, input_dims=[784, 784], latent_dim_shared=30, latent_dims_private=[30, 30],
-                 recon_loss_types=['gaussian_unit_scale', 'gaussian_unit_scale'],
+                 recon_loss_types=['mse_fixed', 'mse_fixed'],
                  log_loss_every=10, writer=None, optimizer_name='Adam', lr=1e-4):
         super(VCCA, self).__init__()
 
@@ -222,8 +230,6 @@ class VCCA(nn.Module):
 
     def _compute_loss(self, data):
         assert len(data) == self.num_views
-        device = self.get_device()
-        data = [x.to(device) for x in data]
 
         hs = []
         hp = []
@@ -266,7 +272,7 @@ class VCCA(nn.Module):
 
         # after generating samples simply use mib loss?
 
-        return loss  # losses['loss'].mean()
+        return loss
 
     def generate(self, shape):
         # return self.diffusion.p_sample_loop(shape)
