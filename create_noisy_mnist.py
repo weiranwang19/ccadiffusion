@@ -112,9 +112,9 @@ def create_mnist():
 
     with open("noisy_mnist_two_views.pkl", 'wb') as f:
         noisy_mnist = {
-            'train_x1': train_x1, 'train_x2': train_x2, 'N_train': N_train,
-            'valid_x1': valid_x1, 'valid_x2': valid_x2, 'N_valid': N_valid,
-            'test_x1': test_x1, 'test_x2': test_x2, 'N_test': N_test,
+            'N_train': N_train, 'train_x1': train_x1, 'train_x2': train_x2, 'train_labels': train_labels,
+            'N_valid': N_valid, 'valid_x1': valid_x1, 'valid_x2': valid_x2, 'valid_labels': valid_labels,
+            'N_test': N_test, 'test_x1': test_x1, 'test_x2': test_x2, 'test_labels': test_labels,
         }
         pickle.dump(mnist,f)
     print("Save complete.")
