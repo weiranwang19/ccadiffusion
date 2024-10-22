@@ -4,12 +4,11 @@ import torch
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-import vcca
-from mnist_dataset import NoisyMnistTwoView
-
 from sklearn.manifold import TSNE
 from sklearn.linear_model import LogisticRegression
 
+import vcca
+from mnist_dataset import NoisyMnistTwoView
 from utils import EmbeddedDataset, build_matrix
 
 data_path = './noisy_mnist_two_views.pkl'
@@ -90,6 +89,6 @@ for epoch in tqdm(range(epochs)):
         tqdm.write('Storing model checkpoint')
         model.save(os.path.join(experiment_dir, 'checkpoint_%02d.pt' % epoch))
 
-checkpoint_path = experiment_dir + '/checkpoint_40.pt'
+checkpoint_path = experiment_dir + '/checkpoint_05.pt'
 model.load(checkpoint_path)
 evaluate(model.encoders_shared[0], 'shared')
