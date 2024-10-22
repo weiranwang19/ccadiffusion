@@ -18,11 +18,11 @@ def init_optimizer(optimizer_name, params):
 
 class NetworkWithTimeInput(nn.Module):
 
-    def __init__(self, input_dim):
+    def __init__(self, input_dim, hidden_dim=1024, dropout_rate=0.0):
         super(NetworkWithTimeInput, self).__init__()
         self.input_dim = input_dim
-        self.hidden_dim = 1024
-        self.dropout_rate = 0.0
+        self.hidden_dim = hidden_dim
+        self.dropout_rate = dropout_rate
         self._input_proj = nn.Sequential(
             nn.Linear(self.input_dim, self.hidden_dim),
             torch.nn.LayerNorm(self.hidden_dim),
@@ -46,24 +46,27 @@ class NetworkWithTimeInput(nn.Module):
             torch.nn.LayerNorm(self.hidden_dim),
             torch.nn.Dropout(self.dropout_rate),
             nn.ReLU(),
+            nn.Linear(self.hidden_dim, self.hidden_dim),
+            torch.nn.LayerNorm(self.hidden_dim),
+            torch.nn.Dropout(self.dropout_rate),
+            nn.ReLU(),
             nn.Linear(self.hidden_dim, self.input_dim),
         )
 
     def forward(self, x, t):
-        # import pdb;pdb.set_trace()
         x_proj = self._input_proj(x) + self._time_proj(timestep_embedding(t, self.hidden_dim))
         return self._network(x_proj)
 
 
 class DiffusionModel(nn.Module):
 
-    def __init__(self, input_dim=784, sampling_timesteps=100, log_loss_every=10, writer=None, optimizer_name='Adam', lr=1e-4):
+    def __init__(self, input_dim=784, timesteps=200, sampling_timesteps=100, log_loss_every=10, writer=None, optimizer_name='Adam', lr=1e-4):
         super(DiffusionModel, self).__init__()
 
         self.input_dim = input_dim
         # self.network = NetworkWithTimeInput(input_dim=input_dim)
         self.network = Unet(channels=1, dim=128, dim_mults = (1, 2, 4))
-        self.diffusion = GaussianDiffusion(image_size=[28, 28], timesteps=200, sampling_timesteps=sampling_timesteps, model=self.network)
+        self.diffusion = GaussianDiffusion(image_size=[28, 28], timesteps=timesteps, sampling_timesteps=sampling_timesteps, model=self.network)
         self.writer = writer
         self.log_loss_every = log_loss_every
 
@@ -159,10 +162,10 @@ class DiffusionModel(nn.Module):
         # import pdb;pdb.set_trace()
         x = data[0]
         batch_size = x.shape[0]
-        x = x.reshape(batch_size, 1, 28, 28)
-        num_diffusion_steps = self.diffusion.num_timesteps
-        t = torch.randint(low=0, high=num_diffusion_steps, size=[batch_size]).to(x.device)
-        # losses = self.diffusion(self.network, x, t)
+        x = torch.reshape(x, [batch_size, self.diffusion.channels] + self.diffusion.image_size)
+        # num_diffusion_steps = self.diffusion.num_timesteps
+        # t = torch.randint(low=0, high=num_diffusion_steps, size=[batch_size]).to(x.device)
+        # # losses = self.diffusion(self.network, x, t)
         loss = self.diffusion(x)
         print(loss)
         # Add other terms.

@@ -1,6 +1,4 @@
 import os
-import yaml
-import argparse
 from tqdm import tqdm
 from torchvision.datasets import MNIST
 from torchvision.transforms import ToTensor
@@ -15,7 +13,7 @@ batch_size = 100
 ###########
 # Loading the MNIST dataset
 mnist_dir = '/data/'
-# mnist_dir = '~'
+mnist_dir = '~'
 train_set = MNIST(mnist_dir, download=False, train=True, transform=ToTensor())
 test_set = MNIST(mnist_dir, download=False, train=False, transform=ToTensor())
 
@@ -30,7 +28,7 @@ writer = None
 epochs = 100
 checkpoint_every = 5
 backup_every = 10000
-model = diffusion_model.DiffusionModel(input_dim=784).cuda()
+model = diffusion_model.DiffusionModel(input_dim=784) # .cuda()
 experiment_dir='./exp'
 
 # checkpoint_path = 'exp/checkpoint_10.pt'
