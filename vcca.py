@@ -78,11 +78,10 @@ def init_optimizer(optimizer_name, params):
 
 class DNN(nn.Module):
 
-    def __init__(self, input_dim, output_dim, loss_types, hidden_dim=1024, dropout_rate=0.0, return_gaussian_dist=True):
+    def __init__(self, input_dim, output_dim, loss_types, output_activation, hidden_dim=1024, dropout_rate=0.0, return_gaussian_dist=True):
         super(DNN, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
-        # TODO(weiranwang): consider adding output activation type.
         self.loss_types = loss_types
         self.hidden_dim = hidden_dim
         self.dropout_rate = dropout_rate
@@ -103,19 +102,26 @@ class DNN(nn.Module):
             # If returning a Gaussian distribution, we need both mean and log variance.
             nn.Linear(self.hidden_dim, self.output_dim * (1 + int(self.return_gaussian_dist))),
         )
+        if output_activation is None:
+            self.output_activation = nn.Identity()
+        elif output_activation == 'sigmoid':
+            self.output_activation = nn.Sigmoid()
+        else:
+            raise ValueError(f'Unsupported output activation {output_activation}')
 
     def forward(self, x):
         out = self._net(x)
         if not self.return_gaussian_dist:
-            return out, None
+            return self.output_activation(out), None
 
         mu, logvar = out[:, :self.output_dim], out[:, self.output_dim:]
-        return mu, logvar
+        return self.output_activation(mu), logvar
 
 
 class VCCA(nn.Module):
 
     def __init__(self, input_dims=[784, 784], latent_dim_shared=30, latent_dims_private=[30, 30],
+                 output_activations=[None, None],
                  recon_loss_types=['mse_fixed', 'mse_fixed'],
                  log_loss_every=10, writer=None, optimizer_name='Adam', lr=1e-4):
         super(VCCA, self).__init__()
@@ -243,9 +249,9 @@ class VCCA(nn.Module):
             latent_kl = normal_kl(sigma, logvar, torch.zeros_like(sigma), torch.zeros_like(logvar)).sum(-1).mean()
             self._add_loss_item(f'latent_loss_shared_{i}', latent_kl)
             latent_loss += latent_kl
-            latent_sample = normal_dist(sigma, logvar).sample()
+            latent_sample = normal_dist(sigma, logvar).rsample()
             hs.append(latent_sample)
-            # prior_hs.append(normal_dist(torch.zeros_like(sigma), torch.zeros_like(logvar)).sample())
+            # prior_hs.append(normal_dist(torch.zeros_like(sigma), torch.zeros_like(logvar)).rsample())
 
             # If using latent diffusion, diffusion loss becomes latent loss, and diffusion sample becomes latent sample.
             enc_p = self.encoders_private[i]
@@ -253,9 +259,9 @@ class VCCA(nn.Module):
             latent_kl = normal_kl(sigma, logvar, torch.zeros_like(sigma), torch.zeros_like(logvar)).sum(-1).mean()
             self._add_loss_item(f'latent_loss_private_{i}', latent_kl)
             latent_loss += latent_kl
-            latent_sample = normal_dist(sigma, logvar).sample()
+            latent_sample = normal_dist(sigma, logvar).rsample()
             hp.append(latent_sample)
-            prior_hp.append(normal_dist(torch.zeros_like(sigma), torch.zeros_like(logvar)).sample())
+            prior_hp.append(normal_dist(torch.zeros_like(sigma), torch.zeros_like(logvar)).rsample())
 
         # TODO(weiranwang): Configure how to aggregate the shared representations. Below we perform all-pairs recon.
         # TODO(weiranwang): Check the MMVAE without compromise paper for details.
@@ -270,9 +276,9 @@ class VCCA(nn.Module):
                 recon_loss_j_i = compute_recon_loss(x, recon_mu, recon_logvar, loss_type).sum(-1).mean()
                 recon_loss += loss_j_i
 
-        # after generating samples simply use mib loss?
-
-        return loss
+        # after generating samples use mib loss?
+        # give weight
+        return latent_loss + recon_loss
 
     def generate(self, shape):
         # return self.diffusion.p_sample_loop(shape)
