@@ -11,6 +11,7 @@ filename = [
 ]
 
 root_dir = '/data/MNIST/raw'
+root_dir = '/home/weiran/MNIST/raw'
 
 def add_noise(X1, X2, debug=False):
     out1 = []
@@ -53,8 +54,6 @@ def create_mnist():
     for name in filename[-2:]:
         with open(root_dir+'/'+name[1], 'rb') as f:
             mnist[name[0]] = np.frombuffer(f.read(), np.uint8, offset=8)
-
-    noisy_mnist = {}
 
     # Training and validation.
     X, T = mnist["training_images"], mnist["training_labels"]

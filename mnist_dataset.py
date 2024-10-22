@@ -39,6 +39,10 @@ class NoisyMnistTwoView(Dataset):
     def __getitem__(self, index):
         if self.mode == 'unsup':
             return self.X1[index], self.X2[index]
+        elif self.mode == 'view1':
+            return self.X1[index], self.Y[index]
+        else:
+            raise ValueError(f'Unsupported mode {self.mode}')
 
     def __len__(self):
         return self.num_samples

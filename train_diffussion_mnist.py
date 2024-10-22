@@ -25,7 +25,7 @@ train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
 evaluate_every = 100000
 
 writer = None
-epochs = 100
+epochs = 10
 checkpoint_every = 5
 backup_every = 10000
 model = diffusion_model.DiffusionModel(input_dim=784) # .cuda()

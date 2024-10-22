@@ -122,6 +122,7 @@ class VCCA(nn.Module):
     def __init__(self, input_dims=[784, 784], latent_dim_shared=30, latent_dims_private=[30, 30],
                  output_activations=[None, None],
                  recon_loss_types=['mse_fixed', 'mse_fixed'],
+                 dropout_rate=0.0,
                  log_loss_every=10, writer=None, optimizer_name='Adam', lr=1e-4):
         super(VCCA, self).__init__()
 
@@ -142,10 +143,20 @@ class VCCA(nn.Module):
         self.encoders_shared = nn.ModuleList()
         self.encoders_private = nn.ModuleList()
         self.decoders = nn.ModuleList()
+        self.dropout_rate = dropout_rate
         for idim, hdim, act in zip(self.input_dims, self.latent_dims_private, self.output_activations):
-            self.encoders_shared.append(DNN(input_dim=idim, output_dim=self.latent_dim_shared, output_activation=None, return_gaussian_dist=True))
-            self.encoders_private.append(DNN(input_dim=idim, output_dim=hdim, output_activation=None, return_gaussian_dist=True))
-            self.decoders.append(DNN(input_dim=(self.latent_dim_shared + hdim), output_dim=idim, output_activation=act, return_gaussian_dist=True))
+            self.encoders_shared.append(
+                DNN(input_dim=idim, output_dim=self.latent_dim_shared, dropout_rate=self.dropout_rate,
+                    output_activation=None, return_gaussian_dist=True)
+            )
+            self.encoders_private.append(
+                DNN(input_dim=idim, output_dim=hdim, dropout_rate=self.dropout_rate,
+                    output_activation=None, return_gaussian_dist=True)
+            )
+            self.decoders.append(
+                DNN(input_dim=(self.latent_dim_shared + hdim), output_dim=idim, dropout_rate=self.dropout_rate,
+                    output_activation=act, return_gaussian_dist=True)
+            )
 
         self.writer = writer
         self.log_loss_every = log_loss_every
@@ -158,7 +169,6 @@ class VCCA(nn.Module):
         self.iterations = 0
 
     def get_device(self):
-#         import pdb;pdb.set_trace()
         return list(self.parameters())[0].device
 
     def train_step(self, data):
@@ -204,6 +214,7 @@ class VCCA(nn.Module):
 
     def load(self, model_path):
         items_to_load = torch.load(model_path)
+        import pdb;pdb.set_trace()
         for key, value in items_to_load.items():
             assert hasattr(self, key)
             attribute = getattr(self, key)
@@ -228,9 +239,10 @@ class VCCA(nn.Module):
     def _get_items_to_store(self):
         items_to_store = {}
         # store the network and optimizer parameters
-        items_to_store['params'] = self.state_dict()
+        items_to_store['encoders_shared'] = self.encoders_shared.state_dict()
+        items_to_store['encoders_private'] = self.encoders_private.state_dict()
+        items_to_store['decoders'] = self.decoders.state_dict()
         items_to_store['opt'] = self.opt.state_dict()
-
         return items_to_store
 
     def _train_step(self, data):
