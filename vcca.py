@@ -134,9 +134,9 @@ class VCCA(nn.Module):
         self.latent_dim_shared = latent_dim_shared
         assert len(latent_dims_private) == self.num_views
         self.latent_dims_private = latent_dims_private
-        self.encoders_shared = []
-        self.encoders_private = []
-        self.decoders = []
+        self.encoders_shared = nn.ModuleList()
+        self.encoders_private = nn.ModuleList()
+        self.decoders = nn.ModuleList()
         for idim, hdim, act in zip(self.input_dims, self.latent_dims_private, self.output_activations):
             self.encoders_shared.append(DNN(input_dim=idim, output_dim=self.latent_dim_shared, output_activation=None, return_gaussian_dist=True))
             self.encoders_private.append(DNN(input_dim=idim, output_dim=hdim, output_activation=None, return_gaussian_dist=True))
@@ -153,7 +153,7 @@ class VCCA(nn.Module):
         self.iterations = 0
 
     def get_device(self):
-        import pdb;pdb.set_trace()
+#         import pdb;pdb.set_trace()
         return list(self.parameters())[0].device
 
     def train_step(self, data):
@@ -237,6 +237,7 @@ class VCCA(nn.Module):
 
     def _compute_loss(self, data):
         assert len(data) == self.num_views
+        import pdb;pdb.set_trace()
 
         hs = []
         hp = []

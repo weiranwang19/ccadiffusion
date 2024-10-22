@@ -8,7 +8,7 @@ import pickle
 
 # Wrapper to create Multi-View datasets starting from 1 view and augmentation
 class NoisyMnistTwoView(Dataset):
-    def __init__(self, data_path, split, transform=None):
+    def __init__(self, data_path, split, mode='unsup', transform=None):
         # assert hasattr(augmentation, '__call__')
 
         with open(data_path,'rb') as f:
@@ -27,6 +27,8 @@ class NoisyMnistTwoView(Dataset):
         self.X1 = torch.from_numpy(X1)
         self.X2 = torch.from_numpy(X2)
         self.Y  = torch.from_numpy(Y)
+        import pdb;pdb.set_trace()
+        self.mode = mode
 
         # TODO(weiranwang): add on-the-fly data augmentation later.
         # self.augmentation = augmentation
@@ -36,7 +38,8 @@ class NoisyMnistTwoView(Dataset):
         # self.apply_same = apply_same
 
     def __getitem__(self, index):
-        return self.X1[index], self.X2[index], self.Y[index]
+        if self.mode == 'unsup':
+            return self.X1[index], self.X2[index]
 
     def __len__(self):
         return self.num_samples

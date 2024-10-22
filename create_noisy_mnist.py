@@ -24,11 +24,14 @@ def add_noise(X1, X2, debug=False):
         x1 = X1[i].reshape(28, 28)
         ang = angles[i]
         # print(ang)
-        img1 = scipy.ndimage.rotate(x1, ang)
+        img1 = scipy.ndimage.rotate(x1, ang, reshape=False)
+        img1[img1 < 0.0] = 0.0
+        img1[img1 > 1.0] = 1.0
         out1.append(img1.reshape(-1))
 
         x2 = X2[i]
         img2 = x2 + bg[i]
+        img2[img2 < 0.0] = 0.0
         img2[img2 > 1.0] = 1.0
         out2.append(img2)
 
@@ -39,7 +42,7 @@ def add_noise(X1, X2, debug=False):
             axs[2].imshow(x2.reshape(28, 28), cmap='gray')
             axs[3].imshow(img2.reshape(28, 28), cmap='gray')
             plt.show()
-    return np.concatenate(out1, 0), np.concatenate(out2, 0)
+    return np.stack(out1, 0), np.stack(out2, 0)
 
 
 def create_mnist():
