@@ -116,7 +116,7 @@ def create_mnist():
             'N_valid': N_valid, 'valid_x1': valid_x1, 'valid_x2': valid_x2, 'valid_labels': valid_labels,
             'N_test': N_test, 'test_x1': test_x1, 'test_x2': test_x2, 'test_labels': test_labels,
         }
-        pickle.dump(mnist,f)
+        pickle.dump(noisy_mnist, f)
     print("Save complete.")
 
 
