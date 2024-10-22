@@ -44,22 +44,22 @@ def normal_dist(mu, logvar):
     return Independent(Normal(loc=mu, scale=torch.exp(0.5 * logvar)), 1)
 
 
-def compute_recon_loss(x_input, recon_mu, recon_logvar, losstype, fixed_std=1.0, eps=1e-7):
+def compute_recon_loss(x_input, recon_mu, recon_logvar, loss_type, fixed_std=1.0, eps=1e-7):
 
-    if losstype == 'cross-entropy':
+    if loss_type == 'cross-entropy':
         # Smoothing of targets, which are assumed to be in [0, 1].
         x_input = x_input * 0.98 + 0.01
         loss = - x_input * torch.log(recon_mu + eps) + (1 - x_input) * torch.log(1 - recon_mu + eps)
-    elif losstype == 'mse_fixed':
+    elif loss_type == 'mse_fixed':
         # Least squares loss, with specified std.
         loss = 0.5 * (((x_input - recon_mu) / fixed_std) ** 2)  # + 0.5 * math.log(2 * math.pi * fixed_std **2)
-    elif losstype == 'mse_learned':
+    elif loss_type == 'mse_learned':
         # Least squares loss, with learned std.
         loss = 0.5 * ((x_input - recon_mu) ** 2) / (torch.exp(recon_logvar) + eps) + 0.5 * recon_logvar  # + 0.5 * math.log(2 * math.pi)
     else:
-        raise NotImplemented(f'Unsupported loss type: {losstype}')
+        raise NotImplemented(f'Unsupported loss type: {loss_type}')
 
-    return loss.sum(-1).mean()
+    return loss
 
 
 # utility function to initialize an optimizer from its name
@@ -71,10 +71,11 @@ def init_optimizer(optimizer_name, params):
 
 class DNN(nn.Module):
 
-    def __init__(self, input_dim, output_dim, hidden_dim=1024, dropout_rate=0.0, return_gaussian_dist=False):
+    def __init__(self, input_dim, output_dim, loss_types, hidden_dim=1024, dropout_rate=0.0, return_gaussian_dist=False):
         super(DNN, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
+        self.loss_types = loss_types
         self.hidden_dim = hidden_dim
         self.dropout_rate = dropout_rate
         self.return_gaussian_dist = return_gaussian_dist
@@ -223,40 +224,45 @@ class VCCA(nn.Module):
         assert len(data) == self.num_views
         device = self.get_device()
         data = [x.to(device) for x in data]
-        x = data[0]
-        batch_size = x.shape[0]
 
         hs = []
         hp = []
-        prior_hs = []
+        # prior_hs = []
         prior_hp = []
-        loss_latent_hs = []
-        loss_latent_hp = []
+        latent_loss = 0.0
         for i, x in enumerate(data):
 
             enc_s = self.encoders_shared[i]
             sigma, logvar = enc_s(x)
             latent_kl = normal_kl(sigma, logvar, torch.zeros_like(sigma), torch.zeros_like(logvar)).sum(-1).mean()
-            loss_latent_hs.append(latent_kl)
+            self._add_loss_item(f'latent_loss_shared_{i}', latent_kl)
+            latent_loss += latent_kl
             latent_sample = normal_dist(sigma, logvar).sample()
             hs.append(latent_sample)
-            prior_hs.append(normal_dist(torch.zeros_like(sigma), torch.zeros_like(logvar)).sample())
+            # prior_hs.append(normal_dist(torch.zeros_like(sigma), torch.zeros_like(logvar)).sample())
 
+            # If using latent diffusion, diffusion loss becomes latent loss, and diffusion sample becomes latent sample.
             enc_p = self.encoders_private[i]
             sigma, logvar = enc_p(x)
             latent_kl = normal_kl(sigma, logvar, torch.zeros_like(sigma), torch.zeros_like(logvar)).sum(-1).mean()
-            loss_latent_hp.append(latent_kl)
+            self._add_loss_item(f'latent_loss_private_{i}', latent_kl)
+            latent_loss += latent_kl
             latent_sample = normal_dist(sigma, logvar).sample()
             hp.append(latent_sample)
             prior_hp.append(normal_dist(torch.zeros_like(sigma), torch.zeros_like(logvar)).sample())
 
-        # TODO(weiranwang): configure how to aggregate the shared representations.
-
-        # TODO(weiranwang): When reconstructing the view itself, use prior sample of private rather than
-        #  posterior sample. Check the MMVAE without compromise paper.
-        for i, dec in enumerate(self.decoders):
-            x = torch.cat([hs[0], hp[i]], axis=1)
-            sigma, mu = dec(x)
+        # TODO(weiranwang): Configure how to aggregate the shared representations. Below we perform all-pairs recon.
+        # TODO(weiranwang): Check the MMVAE without compromise paper for details.
+        recon_loss = 0.0
+        for i, x, dec, loss_type in enumerate(zip(data, self.decoders, self.loss_types)):
+            for j in range(self.num_views):
+                if j == i:
+                    z = torch.cat([hs[j], prior_hp[i]], axis=1)
+                else:
+                    z = torch.cat([hs[j], hp[i]], axis=1)
+                recon_mu, recon_logvar = dec(z)
+                recon_loss_j_i = compute_recon_loss(x, recon_mu, recon_logvar, loss_type).sum(-1).mean()
+                recon_loss += loss_j_i
 
         # after generating samples simply use mib loss?
 
