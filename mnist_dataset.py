@@ -4,29 +4,29 @@ from torch.utils.data import Dataset
 import torchvision.transforms.functional as F
 from PIL import Image
 import numpy as np
+import pickle
 
 # Wrapper to create Multi-View datasets starting from 1 view and augmentation
 class NoisyMnistTwoView(Dataset):
     def __init__(self, data_path, split, transform=None):
-        assert hasattr(augmentation, '__call__')
+        # assert hasattr(augmentation, '__call__')
 
         with open(data_path,'rb') as f:
             noisy_mnist = pickle.load(f)
 
         if split == 'train':
-            X1, X2, Y, N = {noisy_mnist['train_x1'], noisy_mnist['train_x2'], noisy_mnist['train_labels'], noisy_mnist['N_train']
+            X1, X2, Y, N = noisy_mnist['train_x1'], noisy_mnist['train_x2'], noisy_mnist['train_labels'], noisy_mnist['N_train']
         elif split == 'valid':
-            X1, X2, Y, N = {noisy_mnist['valid_x1'], noisy_mnist['valid_x2'], noisy_mnist['valid_labels'], noisy_mnist['N_valid']
+            X1, X2, Y, N = noisy_mnist['valid_x1'], noisy_mnist['valid_x2'], noisy_mnist['valid_labels'], noisy_mnist['N_valid']
         elif split == 'test':
-            X1, X2, Y, N = {noisy_mnist['test_x1'], noisy_mnist['test_x2'], noisy_mnist['test_labels'], noisy_mnist['N_test']
+            X1, X2, Y, N = noisy_mnist['test_x1'], noisy_mnist['test_x2'], noisy_mnist['test_labels'], noisy_mnist['N_test']
         else:
             raise ValueError(f'Unsupported split {split}')
 
-        self.dataset = dataset
         self.num_samples = N
-        self.X1 = torch.Tensor(X1, torch.float32)
-        self.X2 = torch.Tensor(X2, torch.float32)
-        self.Y  = torch.Tensor(Y, torch.int32)
+        self.X1 = torch.from_numpy(X1)
+        self.X2 = torch.from_numpy(X2)
+        self.Y  = torch.from_numpy(Y)
 
         # TODO(weiranwang): add on-the-fly data augmentation later.
         # self.augmentation = augmentation
@@ -36,7 +36,7 @@ class NoisyMnistTwoView(Dataset):
         # self.apply_same = apply_same
 
     def __getitem__(self, index):
-        return self.X1[idx], self.X2[idx], self.Y[idx]
+        return self.X1[index], self.X2[index], self.Y[index]
 
     def __len__(self):
         return self.num_samples

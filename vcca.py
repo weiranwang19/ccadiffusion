@@ -78,11 +78,10 @@ def init_optimizer(optimizer_name, params):
 
 class DNN(nn.Module):
 
-    def __init__(self, input_dim, output_dim, loss_types, output_activation, hidden_dim=1024, dropout_rate=0.0, return_gaussian_dist=True):
+    def __init__(self, input_dim, output_dim, output_activation, hidden_dim=1024, dropout_rate=0.0, return_gaussian_dist=True):
         super(DNN, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
-        self.loss_types = loss_types
         self.hidden_dim = hidden_dim
         self.dropout_rate = dropout_rate
         self.return_gaussian_dist = return_gaussian_dist
@@ -130,6 +129,7 @@ class VCCA(nn.Module):
         # TODO(weiranwang): modify the backbone of networks to use UNET.
 
         self.input_dims = input_dims
+        self.output_activations = output_activations
         self.num_views = len(input_dims)
         self.latent_dim_shared = latent_dim_shared
         assert len(latent_dims_private) == self.num_views
@@ -137,10 +137,10 @@ class VCCA(nn.Module):
         self.encoders_shared = []
         self.encoders_private = []
         self.decoders = []
-        for idim, hdim in zip(self.input_dims, self.latent_dims_private):
-            self.encoders_shared.append(DNN(input_dim=idim, output_dim=self.latent_dim_shared, return_gaussian_dist=True))
-            self.encoders_private.append(DNN(input_dim=idim, output_dim=hdim, return_gaussian_dist=True))
-            self.decoders.append(DNN(input_dim=(self.latent_dim_shared + hdim), output_dim=idim, return_gaussian_dist=True))
+        for idim, hdim, act in zip(self.input_dims, self.latent_dims_private, self.output_activations):
+            self.encoders_shared.append(DNN(input_dim=idim, output_dim=self.latent_dim_shared, output_activation=None, return_gaussian_dist=True))
+            self.encoders_private.append(DNN(input_dim=idim, output_dim=hdim, output_activation=None, return_gaussian_dist=True))
+            self.decoders.append(DNN(input_dim=(self.latent_dim_shared + hdim), output_dim=idim, output_activation=act, return_gaussian_dist=True))
 
         self.writer = writer
         self.log_loss_every = log_loss_every
@@ -153,6 +153,7 @@ class VCCA(nn.Module):
         self.iterations = 0
 
     def get_device(self):
+        import pdb;pdb.set_trace()
         return list(self.parameters())[0].device
 
     def train_step(self, data):
