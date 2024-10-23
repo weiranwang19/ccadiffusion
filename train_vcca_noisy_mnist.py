@@ -15,7 +15,7 @@ data_path = './noisy_mnist_two_views.pkl'
 experiment_dir='./vcca_exp'
 
 
-def evaluate(encoder, encoder_name, device='cpu'):
+def evaluate(encoder, encoder_name, device='cpu', plot=True):
     import matplotlib.pyplot as plt
 
     # Definition of scaler and Logistic classifier used to evaluate the different representations
@@ -43,19 +43,20 @@ def evaluate(encoder, encoder_name, device='cpu'):
     test_accuracy = classifier.score(FX_test, Y_test)
     print(f'Test Accuracy: {test_accuracy}')
 
-    # # Project the test set on the principal components
-    # tsne = TSNE(n_components=2, perplexity=20.0)
-    # projected_X_test = tsne.fit_transform(FX_test)
+    if plot:
+        # Project the test set on the principal components
+        tsne = TSNE(n_components=2, perplexity=20.0)
+        projected_X_test = tsne.fit_transform(FX_test)
 
-    # # And plot the representation with different colors corresponding to the different labels
-    # plt.title(f'{encoder_name}', size=15)
-    # for label in range(10):
-    #     selected_FX_test = projected_X_test[Y_test == label]
-    #     plt.plot(selected_FX_test[:, 0], selected_FX_test[:, 1], 'o', label=label, alpha=0.2)
-    #
-    # # Add a legend to the last plot
-    # plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-    # plt.show()
+        # And plot the representation with different colors corresponding to the different labels
+        plt.title(f'{encoder_name}', size=15)
+        for label in range(10):
+            selected_FX_test = projected_X_test[Y_test == label]
+            plt.plot(selected_FX_test[:, 0], selected_FX_test[:, 1], 'o', label=label, alpha=0.2)
+
+        # Add a legend to the last plot
+        plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+        plt.show()
 
 
 ###########
