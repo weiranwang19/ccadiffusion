@@ -8,12 +8,33 @@ import torch.optim as optimizer_module
 # from nn import timestep_embedding
 # from ddpm.denoising_diffusion_pytorch.denoising_diffusion_pytorch import Unet, GaussianDiffusion
 from torch.distributions import Normal, Independent
+from torch.nn.functional import softplus
 
 """
 MVIB:
 
 https://github.com/mfederici/Multi-View-Information-Bottleneck/tree/master
 """
+
+# Auxiliary network for mutual information estimation
+class MIEstimator(nn.Module):
+    def __init__(self, size1, size2):
+        super(MIEstimator, self).__init__()
+
+        # Vanilla MLP
+        self.net = nn.Sequential(
+            nn.Linear(size1 + size2, 1024),
+            nn.ReLU(True),
+            nn.Linear(1024, 1024),
+            nn.ReLU(True),
+            nn.Linear(1024, 1),
+        )
+
+    # Gradient for JSD mutual information estimation and EB-based estimation
+    def forward(self, x1, x2):
+        pos = self.net(torch.cat([x1, x2], 1))  # Positive Samples
+        neg = self.net(torch.cat([torch.roll(x1, 1, 0), x2], 1))
+        return -softplus(-pos).mean() - softplus(neg).mean(), pos.mean() - neg.exp().mean() + 1
 
 
 def normal_kl(mu1, logvar1, mu2, logvar2):
@@ -160,6 +181,8 @@ class VCCA(nn.Module):
                 DNN(input_dim=(self.latent_dim_shared + hdim), output_dim=idim, dropout_rate=self.dropout_rate,
                     output_activation=act, return_gaussian_dist=True)
             )
+        # Initialization of the mutual information estimation network
+        self.mi_estimator = MIEstimator(self.latent_dim_shared, self.latent_dim_shared)
 
         self.writer = writer
         self.log_loss_every = log_loss_every
@@ -244,6 +267,7 @@ class VCCA(nn.Module):
         items_to_store['encoders_shared'] = self.encoders_shared.state_dict()
         items_to_store['encoders_private'] = self.encoders_private.state_dict()
         items_to_store['decoders'] = self.decoders.state_dict()
+        items_to_store['mi_estimator'] = self.mi_estimator.state_dict()
         items_to_store['opt'] = self.opt.state_dict()
         return items_to_store
 
@@ -260,6 +284,7 @@ class VCCA(nn.Module):
         hs = []
         hp = []
         # prior_hs = []
+        dists = []
         prior_hp = []
         latent_loss = 0.0
         for i, (x, hdim) in enumerate(zip(data, self.latent_dims_private)):
@@ -269,7 +294,9 @@ class VCCA(nn.Module):
             self._add_loss_item(f'latent_loss_shared_{i}', float(latent_kl))
             latent_loss += latent_kl
             # Must use rsample to allow reparameterization.
-            latent_sample = normal_dist(sigma, logvar).rsample()
+            dist = normal_dist(sigma, logvar)
+            dists.append(dist)
+            latent_sample = dist.rsample()
             # import pdb;pdb.set_trace()
             hs.append(latent_sample)
             # prior_hs.append(normal_dist(torch.zeros_like(sigma), torch.zeros_like(logvar)).rsample())
@@ -304,9 +331,40 @@ class VCCA(nn.Module):
                 self._add_loss_item(f'recon_loss_{j}_{i}', float(recon_loss_j_i))
                 recon_loss += recon_loss_j_i
 
+        # Sample from the posteriors with reparametrization
+        # Encode a batch of data
+        p_z1_given_v1 = dists[0]
+        p_z2_given_v2 = dists[1]
+
+        # Sample from the posteriors with reparametrization
+        z1 = p_z1_given_v1.rsample()
+        z2 = p_z2_given_v2.rsample()
+
+        # Mutual information estimation
+        mi_gradient, mi_estimation = self.mi_estimator(z1, z2)
+        mi_gradient = mi_gradient.mean()
+        mi_estimation = mi_estimation.mean()
+
+        # Symmetrized Kullback-Leibler divergence
+        kl_1_2 = p_z1_given_v1.log_prob(z1) - p_z2_given_v2.log_prob(z1)
+        kl_2_1 = p_z2_given_v2.log_prob(z2) - p_z1_given_v1.log_prob(z2)
+        skl = (kl_1_2 + kl_2_1).mean() / 2.
+
+        # Update the value of beta according to the policy
+        # beta = self.beta_scheduler(self.iterations)
+        beta = 1.0
+
+        # Logging the components
+        self._add_loss_item('loss/I_z1_z2', mi_estimation.item())
+        self._add_loss_item('loss/SKL_z1_z2', skl.item())
+        self._add_loss_item('loss/beta', beta)
+
+        # Computing the loss function
+        mib_loss = - mi_gradient + beta * skl
+
         # after generating samples use mib loss?
         # assign weight and beta
-        return latent_loss + recon_loss
+        return latent_loss + recon_loss + mib_loss
 
     def generate(self, shape):
         # return self.diffusion.p_sample_loop(shape)
