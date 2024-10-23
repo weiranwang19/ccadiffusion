@@ -86,16 +86,16 @@ class DNN(nn.Module):
         self.return_gaussian_dist = return_gaussian_dist
         self._net = nn.Sequential(
             nn.Linear(self.input_dim, self.hidden_dim),
-            torch.nn.LayerNorm(self.hidden_dim),
-            torch.nn.Dropout(self.dropout_rate),
+            nn.LayerNorm(self.hidden_dim),
+            nn.Dropout(self.dropout_rate),
             nn.ReLU(),
             nn.Linear(self.hidden_dim, self.hidden_dim),
-            torch.nn.LayerNorm(self.hidden_dim),
-            torch.nn.Dropout(self.dropout_rate),
+            nn.LayerNorm(self.hidden_dim),
+            nn.Dropout(self.dropout_rate),
             nn.ReLU(),
             nn.Linear(self.hidden_dim, self.hidden_dim),
-            torch.nn.LayerNorm(self.hidden_dim),
-            torch.nn.Dropout(self.dropout_rate),
+            nn.LayerNorm(self.hidden_dim),
+            nn.Dropout(self.dropout_rate),
             nn.ReLU(),
             # If returning a Gaussian distribution, we need both mean and log variance.
             nn.Linear(self.hidden_dim, self.output_dim * (1 + int(self.return_gaussian_dist))),
@@ -141,17 +141,21 @@ class VCCA(nn.Module):
 
         self.encoders_shared = nn.ModuleList()
         self.encoders_private = nn.ModuleList()
+
         self.decoders = nn.ModuleList()
         self.dropout_rate = dropout_rate
+        self.hidden_dropout_layer = nn.Dropout(self.dropout_rate)
+
         for idim, hdim, act in zip(self.input_dims, self.latent_dims_private, self.output_activations):
             self.encoders_shared.append(
                 DNN(input_dim=idim, output_dim=self.latent_dim_shared, dropout_rate=self.dropout_rate,
                     output_activation=None, return_gaussian_dist=True)
             )
-            self.encoders_private.append(
-                DNN(input_dim=idim, output_dim=hdim, dropout_rate=self.dropout_rate,
-                    output_activation=None, return_gaussian_dist=True)
-            )
+            if hdim > 0:
+                self.encoders_private.append(
+                    DNN(input_dim=idim, output_dim=hdim, dropout_rate=self.dropout_rate,
+                        output_activation=None, return_gaussian_dist=True)
+                )
             self.decoders.append(
                 DNN(input_dim=(self.latent_dim_shared + hdim), output_dim=idim, dropout_rate=self.dropout_rate,
                     output_activation=act, return_gaussian_dist=True)
@@ -258,7 +262,7 @@ class VCCA(nn.Module):
         # prior_hs = []
         prior_hp = []
         latent_loss = 0.0
-        for i, x in enumerate(data):
+        for i, (x, hdim) in enumerate(zip(data, self.latent_dims_private)):
             enc_s = self.encoders_shared[i]
             sigma, logvar = enc_s(x)
             latent_kl = normal_kl(sigma, logvar, torch.zeros_like(sigma), torch.zeros_like(logvar)).sum(-1).mean()
@@ -266,29 +270,35 @@ class VCCA(nn.Module):
             latent_loss += latent_kl
             # Must use rsample to allow reparameterization.
             latent_sample = normal_dist(sigma, logvar).rsample()
+            # import pdb;pdb.set_trace()
             hs.append(latent_sample)
             # prior_hs.append(normal_dist(torch.zeros_like(sigma), torch.zeros_like(logvar)).rsample())
 
-            # If using latent diffusion, diffusion loss becomes latent loss, and diffusion sample becomes latent sample.
-            enc_p = self.encoders_private[i]
-            sigma, logvar = enc_p(x)
-            latent_kl = normal_kl(sigma, logvar, torch.zeros_like(sigma), torch.zeros_like(logvar)).sum(-1).mean()
-            self._add_loss_item(f'latent_loss_private_{i}', float(latent_kl))
-            latent_loss += latent_kl
-            latent_sample = normal_dist(sigma, logvar).rsample()
-            hp.append(latent_sample)
-            prior_hp.append(normal_dist(torch.zeros_like(sigma), torch.zeros_like(logvar)).rsample())
+            if hdim > 0:
+                # If using latent diffusion, diffusion loss becomes latent loss, and diffusion sample becomes latent sample.
+                enc_p = self.encoders_private[i]
+                sigma, logvar = enc_p(x)
+                latent_kl = normal_kl(sigma, logvar, torch.zeros_like(sigma), torch.zeros_like(logvar)).sum(-1).mean()
+                self._add_loss_item(f'latent_loss_private_{i}', float(latent_kl))
+                latent_loss += latent_kl
+                latent_sample = normal_dist(sigma, logvar).rsample()
+                hp.append(latent_sample)
+                prior_hp.append(normal_dist(torch.zeros_like(sigma), torch.zeros_like(logvar)).rsample())
 
         # TODO(weiranwang): Configure how to aggregate the shared representations. Below we perform all-pairs recon.
         # TODO(weiranwang): Check the MMVAE without compromise paper for details.
         recon_loss = 0.0
-        for i, (x, dec, loss_type) in enumerate(zip(data, self.decoders, self.recon_loss_types)):
+        for i, (x, hdim, dec, loss_type) in enumerate(zip(data, self.latent_dims_private, self.decoders, self.recon_loss_types)):
             # import pdb;pdb.set_trace()
-            for j in range(1):  # self.num_views):
-                if j == i:
-                    z = torch.cat([hs[j], prior_hp[i]], axis=1)
+            for j in range(self.num_views):
+                if hdim == 0:
+                    z = hs[j]
                 else:
-                    z = torch.cat([hs[j], hp[i]], axis=1)
+                    if j == i:
+                        z = torch.cat([hs[j], prior_hp[i]], axis=1)
+                    else:
+                        z = torch.cat([hs[j], hp[i]], axis=1)
+                z = self.hidden_dropout_layer(z)
                 recon_mu, recon_logvar = dec(z)
                 recon_loss_j_i = compute_recon_loss(x, recon_mu, recon_logvar, loss_type).sum(-1).mean()
                 self._add_loss_item(f'recon_loss_{j}_{i}', float(recon_loss_j_i))

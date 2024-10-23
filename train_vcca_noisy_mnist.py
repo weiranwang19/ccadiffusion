@@ -25,11 +25,11 @@ def evaluate(encoder, encoder_name, device='cpu'):
     test_set = NoisyMnistTwoView(data_path, split='test', mode='view1')
 
     # Embed train and test set using the learned encoder
-    embedded_train_set = EmbeddedDataset(base_dataset=valid_set, encoder=encoder, device=device)
+    embedded_valid_set = EmbeddedDataset(base_dataset=valid_set, encoder=encoder, device=device)
     embedded_test_set = EmbeddedDataset(base_dataset=test_set, encoder=encoder, device=device)
 
     # Convert the two sets into 2D matrices for evaluation
-    FX_train, Y_train = build_matrix(embedded_train_set)
+    FX_train, Y_train = build_matrix(embedded_valid_set)
     FX_test, Y_test = build_matrix(embedded_test_set)
     FX_test = FX_test[::4]
     Y_test = Y_test[::4]
@@ -77,10 +77,10 @@ epochs = 20
 checkpoint_every = 1
 writer = SummaryWriter(log_dir=experiment_dir)
 
-model = vcca.VCCA(input_dims=[784, 784], latent_dim_shared=30, latent_dims_private=[30, 30],
+model = vcca.VCCA(input_dims=[784, 784], latent_dim_shared=30, latent_dims_private=[0, 0],
                   output_activations=['sigmoid', 'sigmoid'],
                   recon_loss_types=['mse_fixed', 'mse_fixed'],
-                  dropout_rate=0.6, writer=writer)
+                  dropout_rate=0.0, writer=writer)
 if torch.cuda.is_available():
     model = model.cuda()
 
