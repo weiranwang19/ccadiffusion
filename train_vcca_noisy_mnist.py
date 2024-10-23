@@ -97,7 +97,7 @@ for epoch in tqdm(range(epochs)):
         model.save(os.path.join(experiment_dir, 'checkpoint_%02d.pt' % epoch))
 
     model.eval()
-    evaluate(model.encoders_shared[1], 'shared', device=model.get_device())
+    evaluate(model.encoders_shared[0], 'shared', device=model.get_device())
 
 # checkpoint_path = experiment_dir + '/checkpoint_04.pt'
 # model.load(checkpoint_path)
