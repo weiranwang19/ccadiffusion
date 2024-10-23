@@ -77,7 +77,7 @@ epochs = 20
 checkpoint_every = 1
 writer = SummaryWriter(log_dir=experiment_dir)
 
-model = vcca.VCCA(input_dims=[784, 784], latent_dim_shared=30, latent_dims_private=[30, 30],
+model = vcca.VCCA(input_dims=[784, 784], latent_dim_shared=30, latent_dims_private=[0, 0],
                   output_activations=['sigmoid', 'sigmoid'],
                   recon_loss_types=['mse_fixed', 'mse_fixed'],
                   dropout_rate=0.2, writer=writer)
@@ -95,7 +95,7 @@ for epoch in tqdm(range(epochs)):
         model.save(os.path.join(experiment_dir, 'checkpoint_%02d.pt' % epoch))
 
     model.eval()
-    evaluate(model.encoders_shared[0], 'shared', device=model.get_device())
+    evaluate(model.encoders_shared[1], 'shared', device=model.get_device())
 
 # checkpoint_path = experiment_dir + '/checkpoint_04.pt'
 # model.load(checkpoint_path)
