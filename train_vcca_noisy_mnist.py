@@ -80,7 +80,7 @@ writer = SummaryWriter(log_dir=experiment_dir)
 model = vcca.VCCA(input_dims=[784, 784], latent_dim_shared=30, latent_dims_private=[0, 0],
                   output_activations=['sigmoid', 'sigmoid'],
                   recon_loss_types=['mse_fixed', 'mse_fixed'],
-                  dropout_rate=0.0, writer=writer)
+                  dropout_rate=0.5, writer=writer)
 if torch.cuda.is_available():
     model = model.cuda()
 
