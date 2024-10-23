@@ -15,8 +15,7 @@ data_path = './noisy_mnist_two_views.pkl'
 experiment_dir='./vcca_exp'
 
 
-def evaluate(encoder, encoder_name):
-    device = encoder.device
+def evaluate(encoder, encoder_name, device='cpu'):
     import matplotlib.pyplot as plt
 
     # Definition of scaler and Logistic classifier used to evaluate the different representations
@@ -32,6 +31,8 @@ def evaluate(encoder, encoder_name):
     # Convert the two sets into 2D matrices for evaluation
     FX_train, Y_train = build_matrix(embedded_train_set)
     FX_test, Y_test = build_matrix(embedded_test_set)
+    FX_test = FX_test[::4]
+    Y_test = Y_test[::4]
 
     print('-Computing classifier accuracy')
     classifier = LogisticRegression(solver='saga', multi_class='multinomial', C=10, tol=.1)
@@ -46,12 +47,15 @@ def evaluate(encoder, encoder_name):
     tsne = TSNE(n_components=2, perplexity=20.0)
     projected_X_test = tsne.fit_transform(FX_test)
 
-    # And plot the representation with different colors corresponding to the different labels
-    plt.title(f'{encoder_name}', size=15)
-    for label in range(10):
-        selected_FX_test = projected_X_test[Y_test == label]
-        plt.plot(selected_FX_test[:, 0], selected_FX_test[:, 1], 'o', label=label, alpha=0.05)
-
+    # # And plot the representation with different colors corresponding to the different labels
+    # plt.title(f'{encoder_name}', size=15)
+    # for label in range(10):
+    #     selected_FX_test = projected_X_test[Y_test == label]
+    #     plt.plot(selected_FX_test[:, 0], selected_FX_test[:, 1], 'o', label=label, alpha=0.2)
+    #
+    # # Add a legend to the last plot
+    # plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    # plt.show()
 
 
 ###########
@@ -69,19 +73,20 @@ train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
 evaluate_every = 100000
 
 writer = None
-epochs = 5
+epochs = 20
 checkpoint_every = 1
 writer = SummaryWriter(log_dir=experiment_dir)
 
 model = vcca.VCCA(input_dims=[784, 784], latent_dim_shared=30, latent_dims_private=[30, 30],
                   output_activations=['sigmoid', 'sigmoid'],
                   recon_loss_types=['mse_fixed', 'mse_fixed'],
-                  dropout_rate=0.2, writer=writer)
+                  dropout_rate=0.5, writer=writer)
 if torch.cuda.is_available():
     model = model.cuda()
 
 
 for epoch in tqdm(range(epochs)):
+    model.train()
     for data in tqdm(train_loader):
         model.train_step(data)
 
@@ -89,6 +94,12 @@ for epoch in tqdm(range(epochs)):
         tqdm.write('Storing model checkpoint')
         model.save(os.path.join(experiment_dir, 'checkpoint_%02d.pt' % epoch))
 
-checkpoint_path = experiment_dir + '/checkpoint_05.pt'
-model.load(checkpoint_path)
-evaluate(model.encoders_shared[0], 'shared')
+    model.eval()
+    evaluate(model.encoders_shared[0], 'shared')
+
+# checkpoint_path = experiment_dir + '/checkpoint_04.pt'
+# model.load(checkpoint_path)
+# model.eval()
+#
+# evaluate(model.encoders_shared[0], 'shared')
+# evaluate(model.encoders_private[0], 'private')

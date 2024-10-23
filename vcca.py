@@ -52,7 +52,6 @@ def normal_dist(mu, logvar):
 
 
 def compute_recon_loss(x_input, recon_mu, recon_logvar, loss_type, fixed_std=1.0, eps=1e-7):
-
     if loss_type == 'cross-entropy':
         # Smoothing of targets, which are assumed to be in [0, 1].
         x_input = x_input * 0.98 + 0.01
@@ -114,14 +113,14 @@ class DNN(nn.Module):
             return self.output_activation(out), None
 
         mu, logvar = out[:, :self.output_dim], out[:, self.output_dim:]
+        # Only the mean receives activation.
         return self.output_activation(mu), logvar
 
 
 class VCCA(nn.Module):
 
     def __init__(self, input_dims=[784, 784], latent_dim_shared=30, latent_dims_private=[30, 30],
-                 output_activations=[None, None],
-                 recon_loss_types=['mse_fixed', 'mse_fixed'],
+                 output_activations=[None, None], recon_loss_types=['mse_fixed', 'mse_fixed'],
                  dropout_rate=0.0,
                  log_loss_every=10, writer=None, optimizer_name='Adam', lr=1e-4):
         super(VCCA, self).__init__()
@@ -214,7 +213,6 @@ class VCCA(nn.Module):
 
     def load(self, model_path):
         items_to_load = torch.load(model_path)
-        import pdb;pdb.set_trace()
         for key, value in items_to_load.items():
             assert hasattr(self, key)
             attribute = getattr(self, key)
@@ -285,7 +283,8 @@ class VCCA(nn.Module):
         # TODO(weiranwang): Check the MMVAE without compromise paper for details.
         recon_loss = 0.0
         for i, (x, dec, loss_type) in enumerate(zip(data, self.decoders, self.recon_loss_types)):
-            for j in range(self.num_views):
+            # import pdb;pdb.set_trace()
+            for j in range(1):  # self.num_views):
                 if j == i:
                     z = torch.cat([hs[j], prior_hp[i]], axis=1)
                 else:
