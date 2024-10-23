@@ -364,7 +364,8 @@ class VCCA(nn.Module):
 
         # after generating samples use mib loss?
         # assign weight and beta
-        return latent_loss + recon_loss # + mib_loss
+        # return latent_loss + recon_loss
+        return mib_loss
 
     def generate(self, shape):
         # return self.diffusion.p_sample_loop(shape)
