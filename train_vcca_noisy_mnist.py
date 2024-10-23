@@ -75,7 +75,7 @@ evaluate_every = 100000
 
 writer = None
 epochs = 20
-checkpoint_every = 1
+checkpoint_every = 5
 writer = SummaryWriter(log_dir=experiment_dir)
 
 model = vcca.VCCA(input_dims=[784, 784], latent_dim_shared=30, latent_dims_private=[30, 30],
