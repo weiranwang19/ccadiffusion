@@ -122,7 +122,7 @@ class VCCA(nn.Module):
     def __init__(self, input_dims=[784, 784], latent_dim_shared=30, latent_dims_private=[30, 30],
                  output_activations=[None, None], recon_loss_types=['mse_fixed', 'mse_fixed'],
                  dropout_rate=0.0,
-                 log_loss_every=10, writer=None, optimizer_name='Adam', lr=5e-4):
+                 log_loss_every=10, writer=None, optimizer_name='Adam', lr=1e-4):
         super(VCCA, self).__init__()
 
         # TODO(weiranwang): parse args.

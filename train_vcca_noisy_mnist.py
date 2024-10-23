@@ -67,7 +67,7 @@ train_set = NoisyMnistTwoView(data_path, split='train')
 test_set = NoisyMnistTwoView(data_path, split='valid')
 
 # Initialization of the data loader
-batch_size = 100
+batch_size = 200
 train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
 
 ##########
@@ -78,7 +78,7 @@ epochs = 20
 checkpoint_every = 1
 writer = SummaryWriter(log_dir=experiment_dir)
 
-model = vcca.VCCA(input_dims=[784, 784], latent_dim_shared=30, latent_dims_private=[0, 0],
+model = vcca.VCCA(input_dims=[784, 784], latent_dim_shared=30, latent_dims_private=[30, 30],
                   output_activations=['sigmoid', 'sigmoid'],
                   recon_loss_types=['mse_fixed', 'mse_fixed'],
                   dropout_rate=0.4, writer=writer)
