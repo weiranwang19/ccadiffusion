@@ -29,16 +29,16 @@ def evaluate(encoder, encoder_name, device='cpu', plot=True):
     embedded_test_set = EmbeddedDataset(base_dataset=test_set, encoder=encoder, device=device)
 
     # Convert the two sets into 2D matrices for evaluation
-    FX_train, Y_train = build_matrix(embedded_valid_set)
+    FX_valid, Y_valid = build_matrix(embedded_valid_set)
     FX_test, Y_test = build_matrix(embedded_test_set)
     FX_test = FX_test[::4]
     Y_test = Y_test[::4]
 
     print('-Computing classifier accuracy')
-    classifier = LogisticRegression(solver='saga', multi_class='multinomial', C=10, tol=.1)
+    classifier = LogisticRegression(solver='saga', multi_class='multinomial', C=10, tol=.01)
 
     # Fit the linear classifier on the selection
-    classifier.fit(FX_train, Y_train)
+    classifier.fit(FX_valid, Y_valid)
     # Evaluate the classifier on the embedded test set
     test_accuracy = classifier.score(FX_test, Y_test)
     print(f'Test Accuracy: {test_accuracy}')
@@ -80,7 +80,8 @@ writer = SummaryWriter(log_dir=experiment_dir)
 
 model = vcca.VCCA(input_dims=[784, 784], latent_dim_shared=30, latent_dims_private=[0, 0],
                   output_activations=['sigmoid', 'sigmoid'],
-                  recon_loss_types=['mse_fixed', 'mse_fixed'],
+                  recon_loss_types=['cross_entropy', 'cross_entropy'],
+                  # recon_loss_types=['mse_fixed', 'mse_fixed'],
                   dropout_rate=0.2, writer=writer)
 if torch.cuda.is_available():
     model = model.cuda()

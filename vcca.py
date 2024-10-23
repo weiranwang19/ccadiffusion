@@ -52,7 +52,7 @@ def normal_dist(mu, logvar):
 
 
 def compute_recon_loss(x_input, recon_mu, recon_logvar, loss_type, fixed_std=1.0, eps=1e-7):
-    if loss_type == 'cross-entropy':
+    if loss_type == 'cross_entropy':
         # Smoothing of targets, which are assumed to be in [0, 1].
         x_input = x_input * 0.98 + 0.01
         loss = - x_input * torch.log(recon_mu + eps) + (1 - x_input) * torch.log(1 - recon_mu + eps)
