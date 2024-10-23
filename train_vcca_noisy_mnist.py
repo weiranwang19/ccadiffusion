@@ -43,9 +43,9 @@ def evaluate(encoder, encoder_name, device='cpu'):
     test_accuracy = classifier.score(FX_test, Y_test)
     print(f'Test Accuracy: {test_accuracy}')
 
-    # Project the test set on the principal components
-    tsne = TSNE(n_components=2, perplexity=20.0)
-    projected_X_test = tsne.fit_transform(FX_test)
+    # # Project the test set on the principal components
+    # tsne = TSNE(n_components=2, perplexity=20.0)
+    # projected_X_test = tsne.fit_transform(FX_test)
 
     # # And plot the representation with different colors corresponding to the different labels
     # plt.title(f'{encoder_name}', size=15)
@@ -95,7 +95,7 @@ for epoch in tqdm(range(epochs)):
         model.save(os.path.join(experiment_dir, 'checkpoint_%02d.pt' % epoch))
 
     model.eval()
-    evaluate(model.encoders_shared[0], 'shared')
+    evaluate(model.encoders_shared[0], 'shared', device=model.get_device())
 
 # checkpoint_path = experiment_dir + '/checkpoint_04.pt'
 # model.load(checkpoint_path)

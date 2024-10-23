@@ -168,7 +168,7 @@ class VCCA(nn.Module):
         self.iterations = 0
 
     def get_device(self):
-        return list(self.parameters())[0].device
+        return list(self.encoders_shared[0].parameters())[0].device
 
     def train_step(self, data):
         # Set all the models in training mode
