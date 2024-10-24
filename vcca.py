@@ -67,10 +67,15 @@ def normal_kl(mu1, logvar1, mu2, logvar2):
     )
 
 
-def normal_dist(mu, logvar):
+def sample_normal_dist(mu, logvar):
     # Return a factorized Normal distribution
-    return Independent(Normal(loc=mu, scale=torch.exp(0.5 * logvar)), 1)
+    std = torch.exp(0.5 * logvar)
+    eps = torch.randn_like(mu)
+    return mu + eps * std
 
+def normal_log_prob(mu, logvar, x):
+    res = - 0.5 * ((x - mu) ** 2) / (torch.exp(logvar) + 1e-7) - 0.5 * logvar  # - 0.5 * math.log(2 * math.pi)
+    return res.sum(-1)
 
 def compute_recon_loss(x_input, recon_mu, recon_logvar, loss_type, fixed_std=1.0, eps=1e-7):
     if loss_type == 'cross_entropy':
@@ -294,29 +299,28 @@ class VCCA(nn.Module):
         for i, (x, hdim) in enumerate(zip(data, self.latent_dims_private)):
 
             enc_s = self.encoders_shared[i]
-            sigma, logvar = enc_s(x)
-            latent_kl = normal_kl(sigma, logvar, torch.zeros_like(sigma), torch.zeros_like(logvar)).sum(-1).mean()
+            mu, logvar = enc_s(x)
+            latent_kl = normal_kl(mu, logvar, torch.zeros_like(mu), torch.zeros_like(logvar)).sum(-1).mean()
             self._add_loss_item(f'latent_loss_shared_{i}', float(latent_kl))
             latent_loss += latent_kl
 
-            # Must use rsample to allow reparameterization.
-            dist = normal_dist(sigma, logvar)
-            dists_shared.append(dist)
-            latent_sample = dist.rsample()
+            dists_shared.append((mu, logvar))
+            # Re-parameterization.
+            latent_sample = sample_normal_dist(mu, logvar)
             # import pdb;pdb.set_trace()
             hs.append(latent_sample)
-            # prior_hs.append(normal_dist(torch.zeros_like(sigma), torch.zeros_like(logvar)).rsample())
+            # prior_hs.append(sample_normal_dist(torch.zeros_like(mu), torch.zeros_like(logvar)))
 
             if hdim > 0:
                 # If using latent diffusion, diffusion loss becomes latent loss, and diffusion sample becomes latent sample.
                 enc_p = self.encoders_private[i]
-                sigma, logvar = enc_p(x)
-                latent_kl = normal_kl(sigma, logvar, torch.zeros_like(sigma), torch.zeros_like(logvar)).sum(-1).mean()
+                mu, logvar = enc_p(x)
+                latent_kl = normal_kl(mu, logvar, torch.zeros_like(mu), torch.zeros_like(logvar)).sum(-1).mean()
                 self._add_loss_item(f'latent_loss_private_{i}', float(latent_kl))
                 latent_loss += latent_kl
-                latent_sample = normal_dist(sigma, logvar).rsample()
+                latent_sample = sample_normal_dist(mu, logvar)
                 hp.append(latent_sample)
-                prior_hp.append(normal_dist(torch.zeros_like(sigma), torch.zeros_like(logvar)).rsample())
+                prior_hp.append(sample_normal_dist(torch.zeros_like(mu), torch.zeros_like(logvar)))
             else:
                 hp.append(None)
                 prior_hp.append(None)
@@ -340,14 +344,16 @@ class VCCA(nn.Module):
                 self._add_loss_item(f'recon_loss_{j}_{i}', float(recon_loss_j_i))
                 recon_loss += recon_loss_j_i
 
-        # Sample from the posteriors with reparametrization
-        # Encode a batch of data
-        p_z1_given_v1 = dists_shared[0]
-        p_z2_given_v2 = dists_shared[1]
+        # after generating samples use mib loss?
+        # assign weight and beta
+        return latent_loss + recon_loss
+        # return recon_loss
+        # return mib_loss
 
+    def compute_mib_loss(self, p_z1_given_v1, p_z2_given_v2):
         # Sample from the posteriors with reparametrization
-        z1 = p_z1_given_v1.rsample()
-        z2 = p_z2_given_v2.rsample()
+        z1 = sample_normal_dist(**p_z1_given_v1)
+        z2 = sample_normal_dist(**p_z2_given_v2)
 
         # Mutual information estimation
         mi_gradient, mi_estimation = self.mi_estimator(z1, z2)
@@ -355,8 +361,8 @@ class VCCA(nn.Module):
         mi_estimation = mi_estimation.mean()
 
         # Symmetrized Kullback-Leibler divergence
-        kl_1_2 = p_z1_given_v1.log_prob(z1) - p_z2_given_v2.log_prob(z1)
-        kl_2_1 = p_z2_given_v2.log_prob(z2) - p_z1_given_v1.log_prob(z2)
+        kl_1_2 = normal_log_prob(*p_z1_given_v1, z1) - normal_log_prob(*p_z2_given_v2, z1)
+        kl_2_1 = normal_log_prob(*p_z2_given_v2, z2) - normal_log_prob(*p_z1_given_v1, z2)
         skl = (kl_1_2 + kl_2_1).mean() / 2.
 
         # Update the value of beta according to the policy
@@ -364,18 +370,13 @@ class VCCA(nn.Module):
         beta = 1.0
 
         # Logging the components
-        self._add_loss_item('loss/I_z1_z2', mi_estimation.item())
-        self._add_loss_item('loss/SKL_z1_z2', skl.item())
-        self._add_loss_item('loss/beta', beta)
+        self._add_loss_item('mib_loss/I_z1_z2', mi_estimation.item())
+        self._add_loss_item('mib_loss/SKL_z1_z2', skl.item())
+        self._add_loss_item('mib_loss/beta', beta)
 
         # Computing the loss function
         mib_loss = - mi_gradient + beta * skl
-
-        # after generating samples use mib loss?
-        # assign weight and beta
-        # return latent_loss + recon_loss
-        return recon_loss
-        # return mib_loss
+        return mib_loss
 
     def generate(self, shape):
         # return self.diffusion.p_sample_loop(shape)
