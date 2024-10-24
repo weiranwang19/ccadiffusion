@@ -35,7 +35,7 @@ def add_noise(X1, X2, debug=False):
         out2.append(img2)
 
         if debug and (i % 500 == 0):
-            print(f'Rotation angle:{ang}')
+            print(f'Rotation angle: {ang}')
             fig, axs = plt.subplots(4)
             axs[0].imshow(x1, cmap='gray')
             axs[1].imshow(img1, cmap='gray')
@@ -49,7 +49,7 @@ def create_mnist():
     mnist = {}
     for name in filename[:2]:
         with open(root_dir+'/'+name[1], 'rb') as f:
-            mnist[name[0]] = np.frombuffer(f.read(), np.uint8, offset=16).reshape(-1,28*28)
+            mnist[name[0]] = np.frombuffer(f.read(), np.uint8, offset=16).reshape(-1, 28 * 28)
     for name in filename[-2:]:
         with open(root_dir+'/'+name[1], 'rb') as f:
             mnist[name[0]] = np.frombuffer(f.read(), np.uint8, offset=8)

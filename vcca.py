@@ -168,20 +168,24 @@ class VCCA(nn.Module):
         self.hidden_dropout_layer = nn.Dropout(self.dropout_rate)
 
         for idim, hdim, act in zip(self.input_dims, self.latent_dims_private, self.output_activations):
+            # Shared network.
             self.encoders_shared.append(
                 DNN(input_dim=idim, output_dim=self.latent_dim_shared, dropout_rate=self.dropout_rate,
                     output_activation=None, return_gaussian_dist=True)
             )
             if hdim > 0:
+                # Private network.
                 self.encoders_private.append(
                     DNN(input_dim=idim, output_dim=hdim, dropout_rate=self.dropout_rate,
                         output_activation=None, return_gaussian_dist=True)
                 )
+            else:
+                self.encoders_private.append(nn.Identity())
             self.decoders.append(
                 DNN(input_dim=(self.latent_dim_shared + hdim), output_dim=idim, dropout_rate=self.dropout_rate,
                     output_activation=act, return_gaussian_dist=True)
             )
-        # Initialization of the mutual information estimation network
+        # Initialization of the mutual information estimation network, from MVIB.
         self.mi_estimator = MIEstimator(self.latent_dim_shared, self.latent_dim_shared)
 
         self.writer = writer
@@ -284,18 +288,20 @@ class VCCA(nn.Module):
         hs = []
         hp = []
         # prior_hs = []
-        dists = []
+        dists_shared = []
         prior_hp = []
         latent_loss = 0.0
         for i, (x, hdim) in enumerate(zip(data, self.latent_dims_private)):
+
             enc_s = self.encoders_shared[i]
             sigma, logvar = enc_s(x)
             latent_kl = normal_kl(sigma, logvar, torch.zeros_like(sigma), torch.zeros_like(logvar)).sum(-1).mean()
             self._add_loss_item(f'latent_loss_shared_{i}', float(latent_kl))
             latent_loss += latent_kl
+
             # Must use rsample to allow reparameterization.
             dist = normal_dist(sigma, logvar)
-            dists.append(dist)
+            dists_shared.append(dist)
             latent_sample = dist.rsample()
             # import pdb;pdb.set_trace()
             hs.append(latent_sample)
@@ -311,6 +317,9 @@ class VCCA(nn.Module):
                 latent_sample = normal_dist(sigma, logvar).rsample()
                 hp.append(latent_sample)
                 prior_hp.append(normal_dist(torch.zeros_like(sigma), torch.zeros_like(logvar)).rsample())
+            else:
+                hp.append(None)
+                prior_hp.append(None)
 
         # TODO(weiranwang): Configure how to aggregate the shared representations. Below we perform all-pairs recon.
         # TODO(weiranwang): Check the MMVAE without compromise paper for details.
@@ -333,8 +342,8 @@ class VCCA(nn.Module):
 
         # Sample from the posteriors with reparametrization
         # Encode a batch of data
-        p_z1_given_v1 = dists[0]
-        p_z2_given_v2 = dists[1]
+        p_z1_given_v1 = dists_shared[0]
+        p_z2_given_v2 = dists_shared[1]
 
         # Sample from the posteriors with reparametrization
         z1 = p_z1_given_v1.rsample()
@@ -365,7 +374,8 @@ class VCCA(nn.Module):
         # after generating samples use mib loss?
         # assign weight and beta
         # return latent_loss + recon_loss
-        return mib_loss
+        return recon_loss
+        # return mib_loss
 
     def generate(self, shape):
         # return self.diffusion.p_sample_loop(shape)

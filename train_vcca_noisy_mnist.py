@@ -11,11 +11,14 @@ import vcca
 from mnist_dataset import NoisyMnistTwoView
 from utils import EmbeddedDataset, build_matrix
 
+import matplotlib.pyplot as plt
+
+
 data_path = './noisy_mnist_two_views.pkl'
-experiment_dir='./vcca_exp'
+experiment_dir='./exp'
 
 
-def evaluate(encoder, encoder_name, device='cpu', plot=True):
+def evaluate(encoder, encoder_name, device='cpu', plot=False):
     import matplotlib.pyplot as plt
 
     # Definition of scaler and Logistic classifier used to evaluate the different representations
@@ -67,21 +70,21 @@ train_set = NoisyMnistTwoView(data_path, split='train')
 test_set = NoisyMnistTwoView(data_path, split='valid')
 
 # Initialization of the data loader
-batch_size = 200
+batch_size = 100
 train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
 
 ##########
 evaluate_every = 100000
 
 writer = None
-epochs = 20
+epochs = 50
 checkpoint_every = 5
 writer = SummaryWriter(log_dir=experiment_dir)
 
 model = vcca.VCCA(input_dims=[784, 784], latent_dim_shared=30, latent_dims_private=[0, 0],
                   output_activations=['sigmoid', 'sigmoid'],
                   recon_loss_types=['mse_fixed', 'mse_fixed'],
-                  dropout_rate=0.0, writer=writer)
+                  dropout_rate=0.5, writer=writer)
 if torch.cuda.is_available():
     model = model.cuda()
 
@@ -89,6 +92,12 @@ if torch.cuda.is_available():
 for epoch in tqdm(range(epochs)):
     model.train()
     for data in tqdm(train_loader):
+#         if True:
+#             fig, axs = plt.subplots(2)
+#             axs[0].imshow(data[0][0].cpu().reshape(28,28), cmap='gray')
+#             axs[1].imshow(data[1][0].cpu().reshape(28,28), cmap='gray')
+#             plt.show()
+#         import pdb;pdb.set_trace()
         model.train_step(data)
 
     if epoch % checkpoint_every == 0:
