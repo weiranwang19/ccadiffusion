@@ -1,120 +1,75 @@
-import numpy as np
 import torch
-from torch.utils.data import Subset
-from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import MinMaxScaler
+import torch.nn as nn
+from torch.distributions import Normal, Independent
+from torch.nn.functional import softplus
+
+# Auxiliary network for mutual information estimation
+class MIEstimator(nn.Module):
+    def __init__(self, size1, size2):
+        super(MIEstimator, self).__init__()
+
+        # Vanilla MLP
+        self.net = nn.Sequential(
+            nn.Linear(size1 + size2, 1024),
+            nn.ReLU(True),
+            nn.Linear(1024, 1024),
+            nn.ReLU(True),
+            nn.Linear(1024, 1),
+        )
+
+    # Gradient for JSD mutual information estimation and EB-based estimation
+    def forward(self, x1, x2):
+        pos = self.net(torch.cat([x1, x2], 1))  # Positive Samples
+        neg = self.net(torch.cat([torch.roll(x1, 1, 0), x2], 1))
+        return -softplus(-pos).mean() - softplus(neg).mean(), pos.mean() - neg.exp().mean() + 1
 
 
-class EmbeddedDataset:
-    BLOCK_SIZE = 256
+def normal_kl(mu1, logvar1, mu2, logvar2):
+    """
+    Compute the KL divergence between two gaussians.
 
-    def __init__(self, base_dataset, encoder, device='cpu'):
-        encoder = encoder.to(device)
-        self.means, self.target = self._embed(encoder, base_dataset, device)
+    Shapes are automatically broadcasted, so batches can be compared to
+    scalars, among other use cases.
+    """
+    tensor = None
+    for obj in (mu1, logvar1, mu2, logvar2):
+        if isinstance(obj, torch.Tensor):
+            tensor = obj
+            break
+    assert tensor is not None, "at least one argument must be a Tensor"
 
-    def _embed(self, encoder, dataset, device):
-        encoder.eval()
+    # Force variances to be Tensors. Broadcasting helps convert scalars to
+    # Tensors, but it does not work for torch.exp().
+    logvar1, logvar2 = [
+        x if isinstance(x, torch.Tensor) else torch.tensor(x).to(tensor)
+        for x in (logvar1, logvar2)
+    ]
 
-        data_loader = torch.utils.data.DataLoader(
-            dataset,
-            batch_size=self.BLOCK_SIZE,
-            shuffle=False)
-
-        ys = []
-        reps = []
-        with torch.no_grad():
-            for x, y in data_loader:
-                x = x.to(device)
-                y = y.to(device)
-
-                z_given_x, _ = encoder(x)
-
-                reps.append(z_given_x.detach())
-                ys.append(y)
-
-            ys = torch.cat(ys, 0)
-
-        return reps, ys
-
-    def __getitem__(self, index):
-        y = self.target[index]
-        x = self.means[index // self.BLOCK_SIZE][index % self.BLOCK_SIZE]
-
-        return x, y
-
-    def __len__(self):
-        return self.target.size(0)
+    return 0.5 * (
+        -1.0
+        + logvar2
+        - logvar1
+        + torch.exp(logvar1 - logvar2)
+        + ((mu1 - mu2) ** 2) * torch.exp(-logvar2)
+    )
 
 
-def split(dataset, size, split_type):
-    if split_type == 'Random':
-        data_split, _ = torch.utils.data.random_split(dataset, [size, len(dataset) - size])
-    elif split_type == 'Balanced':
-        class_ids = {}
-        for idx, (_, y) in enumerate(dataset):
-            if isinstance(y, torch.Tensor):
-                y = y.item()
-            if y not in class_ids:
-                class_ids[y] = []
-            class_ids[y].append(idx)
-
-        ids_per_class = size // len(class_ids)
-
-        selected_ids = []
-
-        for ids in class_ids.values():
-            selected_ids += list(np.random.choice(ids, min(ids_per_class, len(ids)), replace=False))
-        data_split = Subset(dataset, selected_ids)
-
-    return data_split
+def normal_dist(mu, logvar):
+    return Independent(Normal(loc=mu, scale=torch.exp(0.5 * logvar)), 1)
 
 
-def build_matrix(dataset):
-    data_loader = torch.utils.data.DataLoader(dataset, batch_size=256, shuffle=False)
+def compute_recon_loss(x_input, recon_mu, recon_logvar, loss_type, fixed_std=1.0, eps=1e-7):
+    if loss_type == 'cross_entropy':
+        # Smoothing of targets, which are assumed to be in [0, 1].
+        x_input = x_input * 0.98 + 0.01
+        loss = - x_input * torch.log(recon_mu + eps) + (1 - x_input) * torch.log(1 - recon_mu + eps)
+    elif loss_type == 'mse_fixed':
+        # Least squares loss, with specified std.
+        loss = 0.5 * (((x_input - recon_mu) / fixed_std) ** 2)  # + 0.5 * math.log(2 * math.pi * fixed_std **2)
+    elif loss_type == 'mse_learned':
+        # Least squares loss, with learned std.
+        loss = 0.5 * ((x_input - recon_mu) ** 2) / (torch.exp(recon_logvar) + eps) + 0.5 * recon_logvar  # + 0.5 * math.log(2 * math.pi)
+    else:
+        raise NotImplemented(f'Unsupported loss type: {loss_type}')
 
-    xs = []
-    ys = []
-
-    for x, y in data_loader:
-        xs.append(x)
-        ys.append(y)
-
-    xs = torch.cat(xs, 0)
-    ys = torch.cat(ys, 0)
-
-    if xs.is_cuda:
-        xs = xs.cpu()
-    if ys.is_cuda:
-        ys = ys.cpu()
-
-    return xs.data.numpy(), ys.data.numpy()
-
-
-def evaluate(encoder, train_on, test_on, device):
-    embedded_train = EmbeddedDataset(train_on, encoder, device=device)
-    embedded_test = EmbeddedDataset(test_on, encoder, device=device)
-    return train_and_evaluate_linear_model(embedded_train, embedded_test)
-
-
-def train_and_evaluate_linear_model_from_matrices(x_train, y_train, solver='saga', multi_class='multinomial', tol=.1, C=10):
-    model = LogisticRegression(solver=solver, multi_class=multi_class, tol=tol, C=C)
-    model.fit(x_train, y_train)
-    return model
-
-
-def train_and_evaluate_linear_model(train_set, test_set, solver='saga', multi_class='multinomial', tol=.1, C=10):
-    x_train, y_train = build_matrix(train_set)
-    x_test, y_test = build_matrix(test_set)
-
-    scaler = MinMaxScaler()
-
-    x_train = scaler.fit_transform(x_train)
-    x_test = scaler.transform(x_test)
-
-    model = LogisticRegression(solver=solver, multi_class=multi_class, tol=tol, C=C)
-    model.fit(x_train, y_train)
-
-    test_accuracy = model.score(x_test, y_test)
-    train_accuracy = model.score(x_train, y_train)
-
-    return train_accuracy, test_accuracy
+    return loss

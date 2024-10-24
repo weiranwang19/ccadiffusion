@@ -9,9 +9,7 @@ from sklearn.linear_model import LogisticRegression
 
 import vcca
 from mnist_dataset import NoisyMnistTwoView
-from utils import EmbeddedDataset, build_matrix
-
-import matplotlib.pyplot as plt
+from eval_utils import EmbeddedDataset, build_matrix
 
 
 data_path = './noisy_mnist_two_views.pkl'
@@ -33,14 +31,14 @@ def evaluate(encoder, encoder_name, device='cpu', plot=True):
 
     # Convert the two sets into 2D matrices for evaluation
     FX_valid, Y_valid = build_matrix(embedded_valid_set)
-    # FX_test, Y_test = build_matrix(embedded_test_set)
-    # FX_test = FX_test[::4]
-    # Y_test = Y_test[::4]
-    train_set = NoisyMnistTwoView(data_path, split='train', mode='view1')
-    embedded_test_set = EmbeddedDataset(base_dataset=train_set, encoder=encoder, device=device)
     FX_test, Y_test = build_matrix(embedded_test_set)
-    FX_test = FX_test[::50]
-    Y_test = Y_test[::50]
+    FX_test = FX_test[::4]
+    Y_test = Y_test[::4]
+    # train_set = NoisyMnistTwoView(data_path, split='train', mode='view1')
+    # embedded_test_set = EmbeddedDataset(base_dataset=train_set, encoder=encoder, device=device)
+    # FX_test, Y_test = build_matrix(embedded_test_set)
+    # FX_test = FX_test[::50]
+    # Y_test = Y_test[::50]
 
     print('-Computing classifier accuracy')
     classifier = LogisticRegression(solver='saga', multi_class='multinomial', C=10, tol=.01)
@@ -75,7 +73,7 @@ train_set = NoisyMnistTwoView(data_path, split='train')
 test_set = NoisyMnistTwoView(data_path, split='valid')
 
 # Initialization of the data loader
-batch_size = 200
+batch_size = 100
 train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
 
 ##########
@@ -86,9 +84,9 @@ epochs = 50
 checkpoint_every = 5
 writer = SummaryWriter(log_dir=experiment_dir)
 
-model = vcca.VCCA(input_dims=[784, 784], latent_dim_shared=30, latent_dims_private=[30, 30],
+model = vcca.VCCA(input_dims=[784, 784], latent_dim_shared=30, latent_dims_private=[0, 0],
                   output_activations=['sigmoid', 'sigmoid'],
-                  recon_loss_types=['mse_fixed', 'mse_fixed'],
+                  recon_loss_types=['mse_fixed', 'mse_learned'],
                   dropout_rate=0.2, writer=writer)
 if torch.cuda.is_available():
     model = model.cuda()
@@ -97,13 +95,6 @@ if torch.cuda.is_available():
 for epoch in tqdm(range(epochs)):
     model.train()
     for data in tqdm(train_loader):
-        # if True:
-        #     for i in range(5):
-        #         fig, axs = plt.subplots(2)
-        #         axs[0].imshow(data[0][i].cpu().reshape(28,28), cmap='gray')
-        #         axs[1].imshow(data[1][i].cpu().reshape(28,28), cmap='gray')
-        #         plt.show()
-        # import pdb;pdb.set_trace()
         model.train_step(data)
 
     if epoch % checkpoint_every == 0:
