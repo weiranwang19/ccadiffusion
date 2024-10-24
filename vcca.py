@@ -25,29 +25,24 @@ def init_optimizer(optimizer_name, params):
 
 class DNN(nn.Module):
 
-    def __init__(self, input_dim, output_dim, output_activation, hidden_dim=1024, dropout_rate=0.0, return_gaussian_dist=True):
+    def __init__(self, input_dim, output_dim, output_activation, num_hidden_layers=3, hidden_dim=1024, dropout_rate=0.0, return_gaussian_dist=True):
         super(DNN, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
+        self.num_hidden_layers = num_hidden_layers
         self.hidden_dim = hidden_dim
         self.dropout_rate = dropout_rate
         self.return_gaussian_dist = return_gaussian_dist
-        self._net = nn.Sequential(
-            nn.Linear(self.input_dim, self.hidden_dim),
-            nn.LayerNorm(self.hidden_dim),
-            nn.Dropout(self.dropout_rate),
-            nn.ReLU(),
-            nn.Linear(self.hidden_dim, self.hidden_dim),
-            nn.LayerNorm(self.hidden_dim),
-            nn.Dropout(self.dropout_rate),
-            nn.ReLU(),
-            nn.Linear(self.hidden_dim, self.hidden_dim),
-            nn.LayerNorm(self.hidden_dim),
-            nn.Dropout(self.dropout_rate),
-            nn.ReLU(),
-            # If returning a Gaussian distribution, we need both mean and log variance.
-            nn.Linear(self.hidden_dim, self.output_dim * (1 + int(self.return_gaussian_dist))),
-        )
+
+        module_list = [nn.Linear(self.input_dim, self.hidden_dim)]
+        module_list += [nn.LayerNorm(self.hidden_dim), nn.Dropout(self.dropout_rate), nn.ReLU(),
+                        nn.Linear(self.hidden_dim, self.hidden_dim)] * self.num_hidden_layers
+        module_list += [nn.LayerNorm(self.hidden_dim), nn.Dropout(self.dropout_rate), nn.ReLU(),
+                        # If returning a Gaussian distribution, we need both mean and log variance.
+                        nn.Linear(self.hidden_dim, self.output_dim * (1 + int(self.return_gaussian_dist)))]
+        self._net = nn.Sequential(*module_list)
+
+        # Note output activation is only applied to the Gaussian distribution mean.
         if output_activation is None:
             self.output_activation = nn.Identity()
         elif output_activation == 'sigmoid':

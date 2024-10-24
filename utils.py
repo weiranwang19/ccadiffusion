@@ -3,26 +3,6 @@ import torch.nn as nn
 from torch.distributions import Normal, Independent
 from torch.nn.functional import softplus
 
-# Auxiliary network for mutual information estimation
-class MIEstimator(nn.Module):
-    def __init__(self, size1, size2):
-        super(MIEstimator, self).__init__()
-
-        # Vanilla MLP
-        self.net = nn.Sequential(
-            nn.Linear(size1 + size2, 1024),
-            nn.ReLU(True),
-            nn.Linear(1024, 1024),
-            nn.ReLU(True),
-            nn.Linear(1024, 1),
-        )
-
-    # Gradient for JSD mutual information estimation and EB-based estimation
-    def forward(self, x1, x2):
-        pos = self.net(torch.cat([x1, x2], 1))  # Positive Samples
-        neg = self.net(torch.cat([torch.roll(x1, 1, 0), x2], 1))
-        return -softplus(-pos).mean() - softplus(neg).mean(), pos.mean() - neg.exp().mean() + 1
-
 
 def normal_kl(mu1, logvar1, mu2, logvar2):
     """
@@ -73,3 +53,24 @@ def compute_recon_loss(x_input, recon_mu, recon_logvar, loss_type, fixed_std=1.0
         raise NotImplemented(f'Unsupported loss type: {loss_type}')
 
     return loss
+
+
+class MIEstimator(nn.Module):
+    # Auxiliary network for mutual information estimation
+    def __init__(self, size1, size2):
+        super(MIEstimator, self).__init__()
+
+        # Vanilla MLP
+        self.net = nn.Sequential(
+            nn.Linear(size1 + size2, 1024),
+            nn.ReLU(True),
+            nn.Linear(1024, 1024),
+            nn.ReLU(True),
+            nn.Linear(1024, 1),
+        )
+
+    # Gradient for JSD mutual information estimation and EB-based estimation
+    def forward(self, x1, x2):
+        pos = self.net(torch.cat([x1, x2], 1))  # Positive Samples
+        neg = self.net(torch.cat([torch.roll(x1, 1, 0), x2], 1))
+        return -softplus(-pos).mean() - softplus(neg).mean(), pos.mean() - neg.exp().mean() + 1
