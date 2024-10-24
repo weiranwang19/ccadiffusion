@@ -10,8 +10,7 @@ filename = [
     ["test_labels","t10k-labels-idx1-ubyte"]
 ]
 
-root_dir = '/data/MNIST/raw'
-root_dir = '/home/weiran/MNIST/raw'
+root_dir = '../MNIST/raw'
 
 def add_noise(X1, X2, debug=False):
     out1 = []
@@ -19,12 +18,11 @@ def add_noise(X1, X2, debug=False):
 
     N = X1.shape[0]
     angles = np.random.uniform(low=-45.0, high=45.0, size=[N])
-    bg = np.random.uniform(size=X2.shape) * 0.4
+    bg = np.random.uniform(size=X2.shape) * 0.25
 
     for i in range(N):
         x1 = X1[i].reshape(28, 28)
         ang = angles[i]
-        # print(ang)
         img1 = scipy.ndimage.rotate(x1, ang, reshape=False)
         img1[img1 < 0.0] = 0.0
         img1[img1 > 1.0] = 1.0
@@ -36,7 +34,8 @@ def add_noise(X1, X2, debug=False):
         img2[img2 > 1.0] = 1.0
         out2.append(img2)
 
-        if debug:
+        if debug and (i % 500 == 0):
+            print(f'Rotation angle:{ang}')
             fig, axs = plt.subplots(4)
             axs[0].imshow(x1, cmap='gray')
             axs[1].imshow(img1, cmap='gray')
