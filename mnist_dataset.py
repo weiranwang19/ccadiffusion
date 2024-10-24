@@ -1,15 +1,13 @@
 import torch
-from torchvision import transforms, datasets
 from torch.utils.data import Dataset
 import torchvision.transforms.functional as F
 from PIL import Image
 import numpy as np
 import pickle
 
-# Wrapper to create Multi-View datasets starting from 1 view and augmentation
-class NoisyMnistTwoView(Dataset):
-    def __init__(self, data_path, split, mode='unsup', transform=None):
-        # assert hasattr(augmentation, '__call__')
+
+class NoisyMnistTwoViews(Dataset):
+    def __init__(self, data_path, split, mode='unsup'):
 
         with open(data_path,'rb') as f:
             noisy_mnist = pickle.load(f)
@@ -29,13 +27,6 @@ class NoisyMnistTwoView(Dataset):
         self.Y  = torch.from_numpy(Y)
         self.mode = mode
 
-        # TODO(weiranwang): add on-the-fly data augmentation later.
-        # self.augmentation = augmentation
-        # self.transform = transform
-        # self.target_transform = target_transform
-        # self.to_tensor = transforms.ToTensor()
-        # self.apply_same = apply_same
-
     def __getitem__(self, index):
         if self.mode == 'unsup':
             return self.X1[index], self.X2[index]
@@ -48,38 +39,34 @@ class NoisyMnistTwoView(Dataset):
         return self.num_samples
 
 
+class PixelCorruption(object):
+    MODALITIES = ['flip', 'drop']
 
-#
-# # Transform which randomly corrupts pixels with a given probabiliy
-# class PixelCorruption(object):
-#     MODALITIES = ['flip', 'drop']
-#
-#     def __init__(self, p, min=0, max=1, mode='drop'):
-#         super(PixelCorruption, self).__init__()
-#
-#         assert mode in self.MODALITIES
-#
-#         self.p = p
-#         self.min = min
-#         self.max = max
-#         self.mode = mode
-#
-#     def __call__(self, im):
-#         if isinstance(im, Image.Image) or isinstance(im, np.ndarray):
-#             im = F.to_tensor(im)
-#
-#         if self.p < 1.0:
-#             mask = torch.bernoulli(torch.zeros(im.size(1), im.size(2)) + 1. - self.p).bool()
-#         else:
-#             mask = torch.zeros(im.size(1), im.size(2)).bool()
-#
-#         if len(im.size())>2:
-#             mask = mask.unsqueeze(0).repeat(im.size(0),1,1)
-#
-#         if self.mode == 'flip':
-#             im[mask] = self.max - im[mask]
-#         elif self.mode == 'drop':
-#             im[mask] = self.min
-#
-#         return im
-#
+    def __init__(self, p, min=0, max=1, mode='drop'):
+        super(PixelCorruption, self).__init__()
+
+        assert mode in self.MODALITIES
+
+        self.p = p
+        self.min = min
+        self.max = max
+        self.mode = mode
+
+    def __call__(self, im):
+        if isinstance(im, Image.Image) or isinstance(im, np.ndarray):
+            im = F.to_tensor(im)
+
+        if self.p < 1.0:
+            mask = torch.bernoulli(torch.zeros(im.size(1), im.size(2)) + 1. - self.p).bool()
+        else:
+            mask = torch.zeros(im.size(1), im.size(2)).bool()
+
+        if len(im.size())>2:
+            mask = mask.unsqueeze(0).repeat(im.size(0),1,1)
+
+        if self.mode == 'flip':
+            im[mask] = self.max - im[mask]
+        elif self.mode == 'drop':
+            im[mask] = self.min
+
+        return im

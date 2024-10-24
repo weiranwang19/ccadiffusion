@@ -8,7 +8,7 @@ from sklearn.manifold import TSNE
 from sklearn.linear_model import LogisticRegression
 
 import vcca
-from mnist_dataset import NoisyMnistTwoView
+from mnist_dataset import NoisyMnistTwoViews
 from eval_utils import EmbeddedDataset, build_matrix
 
 
@@ -22,8 +22,8 @@ def evaluate(encoder, encoder_name, device='cpu', plot=True):
     # Definition of scaler and Logistic classifier used to evaluate the different representations
     print('-Embedding the dataset')
 
-    valid_set = NoisyMnistTwoView(data_path, split='valid', mode='view1')
-    test_set = NoisyMnistTwoView(data_path, split='test', mode='view1')
+    valid_set = NoisyMnistTwoViews(data_path, split='valid', mode='view1')
+    test_set = NoisyMnistTwoViews(data_path, split='test', mode='view1')
 
     # Embed train and test set using the learned encoder
     embedded_valid_set = EmbeddedDataset(base_dataset=valid_set, encoder=encoder, device=device)
@@ -34,11 +34,6 @@ def evaluate(encoder, encoder_name, device='cpu', plot=True):
     FX_test, Y_test = build_matrix(embedded_test_set)
     FX_test = FX_test[::4]
     Y_test = Y_test[::4]
-    # train_set = NoisyMnistTwoView(data_path, split='train', mode='view1')
-    # embedded_test_set = EmbeddedDataset(base_dataset=train_set, encoder=encoder, device=device)
-    # FX_test, Y_test = build_matrix(embedded_test_set)
-    # FX_test = FX_test[::50]
-    # Y_test = Y_test[::50]
 
     print('-Computing classifier accuracy')
     classifier = LogisticRegression(solver='saga', multi_class='multinomial', C=10, tol=.01)
@@ -69,8 +64,8 @@ def evaluate(encoder, encoder_name, device='cpu', plot=True):
 # Dataset #
 ###########
 # Loading the MNIST dataset
-train_set = NoisyMnistTwoView(data_path, split='train')
-test_set = NoisyMnistTwoView(data_path, split='valid')
+train_set = NoisyMnistTwoViews(data_path, split='train')
+# valid_set = NoisyMnistTwoViews(data_path, split='valid')
 
 # Initialization of the data loader
 batch_size = 100
@@ -98,7 +93,7 @@ for epoch in tqdm(range(epochs)):
         model.train_step(data)
 
     if epoch % checkpoint_every == 0:
-        tqdm.write('Storing model checkpoint')
+        tqdm.write('Storing model checkpoint.')
         model.save(os.path.join(experiment_dir, 'checkpoint_%02d.pt' % epoch))
 
     model.eval()
