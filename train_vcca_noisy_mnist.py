@@ -92,7 +92,7 @@ for epoch in tqdm(range(epochs)):
     for data in tqdm(train_loader):
         model.train_step(data)
 
-    if epoch % checkpoint_every == 0:
+    if (epoch + 1) % checkpoint_every == 0:
         tqdm.write('Storing model checkpoint.')
         model.save(os.path.join(experiment_dir, 'checkpoint_%02d.pt' % epoch))
 
