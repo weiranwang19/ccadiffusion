@@ -32,6 +32,8 @@ class NoisyMnistTwoViews(Dataset):
             return self.X1[index], self.X2[index]
         elif self.mode == 'view1':
             return self.X1[index], self.Y[index]
+        elif self.mode == 'view2':
+            return self.X2[index], self.Y[index]
         else:
             raise ValueError(f'Unsupported mode {self.mode}')
 

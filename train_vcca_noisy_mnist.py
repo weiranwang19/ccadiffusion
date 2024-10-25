@@ -16,14 +16,14 @@ data_path = './noisy_mnist_two_views.pkl'
 experiment_dir='./exp'
 
 
-def evaluate(encoder, encoder_name, device='cpu', plot=True):
+def evaluate(encoder, data_mode, encoder_name, device='cpu', plot=True):
     import matplotlib.pyplot as plt
 
     # Definition of scaler and Logistic classifier used to evaluate the different representations
     print('-Embedding the dataset')
 
-    valid_set = NoisyMnistTwoViews(data_path, split='valid', mode='view1')
-    test_set = NoisyMnistTwoViews(data_path, split='test', mode='view1')
+    valid_set = NoisyMnistTwoViews(data_path, split='valid', mode=data_mode)
+    test_set = NoisyMnistTwoViews(data_path, split='test', mode=data_mode)
 
     # Embed train and test set using the learned encoder
     embedded_valid_set = EmbeddedDataset(base_dataset=valid_set, encoder=encoder, device=device)
@@ -72,36 +72,35 @@ batch_size = 100
 train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
 
 ##########
-evaluate_every = 100000
-
-writer = None
 epochs = 50
 checkpoint_every = 5
 writer = SummaryWriter(log_dir=experiment_dir)
 
-model = vcca.VCCA(input_dims=[784, 784], latent_dim_shared=30, latent_dims_private=[0, 0],
+model = vcca.VCCA(input_dims=[784, 784], latent_dim_shared=30, latent_dims_private=[30, 30],
                   output_activations=['sigmoid', 'sigmoid'],
                   recon_loss_types=['mse_fixed', 'mse_learned'],
                   dropout_rate=0.2, writer=writer)
 if torch.cuda.is_available():
     model = model.cuda()
 
-
 for epoch in tqdm(range(epochs)):
     model.train()
+    print(f'epoch={epoch}')
+
     for data in tqdm(train_loader):
         model.train_step(data)
 
     if (epoch + 1) % checkpoint_every == 0:
         tqdm.write('Storing model checkpoint.')
-        model.save(os.path.join(experiment_dir, 'checkpoint_%02d.pt' % epoch))
+        model.save(os.path.join(experiment_dir, 'checkpoint_%02d.pt' % (epoch+1)))
 
         model.eval()
-        evaluate(model.encoders_shared[0], 'shared', device=model.get_device())
+        evaluate(model.encoders_shared[0], 'view1','shared', device=model.get_device())
 
-# checkpoint_path = experiment_dir + '/checkpoint_04.pt'
-# model.load(checkpoint_path)
-# model.eval()
-#
-# evaluate(model.encoders_shared[0], 'shared')
-# evaluate(model.encoders_private[0], 'private')
+
+checkpoint_path = experiment_dir + '/checkpoint_45.pt'
+model.load(checkpoint_path)
+model.eval()
+
+evaluate(model.encoders_shared[0], 'view1', 'shared')
+evaluate(model.encoders_private[0], 'view1', 'private')
